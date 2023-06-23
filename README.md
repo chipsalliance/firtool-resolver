@@ -1,0 +1,1 @@
+# firtool-resolver
