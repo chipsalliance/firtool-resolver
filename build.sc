@@ -1,19 +1,41 @@
+// SPDX-License-Identifier: Apache-2.0
+
 import mill._, scalalib._, publish._
 
-object llvmFirtoolNative extends Cross[LLVMFirtoolNativeModule]("macos-x86", "linux-x86")
-//("windows-x86", "macos-x86", "linux-x86")
+val platforms = Seq[String](
+  "macos-x64",
+  "linux-x64",
+  "windows-x64"
+)
+
+object `llvm-firtool-native` extends Cross[LLVMFirtoolNativeModule](platforms)
 
 trait LLVMFirtoolNativeModule extends Cross.Module[String] with JavaModule with PublishModule {
-  def suffix = T { "_" + crossValue }
 
-  def publishVersion = "1.44.0-SNAPSHOT"
+  private def platform = crossValue
 
-  // TODO parameterize
-  private val firtoolVersion = "1.44.0"
+  def suffix = T { s"-$platform" }
+
+  def publishVersion = "1.48.0-SNAPSHOT"
+
+  private def firtoolVersion = "1.48.0"
+
+  private def groupId = "org.chipsalliance"
+
+  // Note "artifactId" is defined by Mill itself
+  private def artId = "llvm-firtool"
+
+  private def MNDDSSpecVersion = "0.1.0"
+
+  private def binName = "firtool"
+
+  private val (operatingSystem, architecture) = platform.split("-") match {
+    case Array(o, a) => (o, a)
+  }
 
   def pomSettings = PomSettings(
     description = "Package of native firtool binary",
-    organization = "org.chipsalliance",
+    organization = groupId,
     url = "https://chipsalliance.org",
     licenses = Seq(License.`Apache-2.0`),
     versionControl = VersionControl.github("chipsalliance", "llvm-firtool"),
@@ -22,40 +44,47 @@ trait LLVMFirtoolNativeModule extends Cross.Module[String] with JavaModule with 
     )
   )
 
-  private val lookup = Map(
-    "macos-x86" -> "macos-11",
-    "linux-x86" -> "ubuntu-20.04"
-  )
-
-  private val tarballName = s"firrtl-bin-${lookup(crossValue)}.tar.gz"
-
-  private val url = s"https://github.com/llvm/circt/releases/download/firtool-$firtoolVersion/$tarballName"
+  private val tarballName = if (operatingSystem == "windows") {
+    s"firrtl-bin-$platform.zip"
+  } else {
+    s"firrtl-bin-$platform.tar.gz"
+  }
+  private val releaseUrl = "https://github.com/llvm/circt/releases/download/firtool-1.48.0"
+  private val archiveUrl = s"$releaseUrl/$tarballName"
 
   def tarball = T {
     val file = T.dest / tarballName
-    os.write(file, requests.get.stream(url))
+    os.write(file, requests.get.stream(archiveUrl))
     PathRef(file)
   }
 
   def extracted = T {
-    os.proc("tar", "zxf", tarball().path)
-      .call(cwd = T.dest)
-    // Rename the directory to a standard path
+    // Windows uses .zip
+    if (operatingSystem == "windows") {
+      os.proc("unzip", tarball().path)
+        .call(cwd = T.dest)
+    } else {
+      os.proc("tar", "zxf", tarball().path)
+        .call(cwd = T.dest)
+    }
     val downloadedDir = os.list(T.dest).head
-    val destDir = T.dest / "firtool"
-    os.move(downloadedDir, destDir)
+    val baseDir = T.dest / groupId / artId
+    os.makeDir.all(baseDir)
+    // Record MNDDS version
+    os.write(baseDir / "MNDDS.version", MNDDSSpecVersion)
+
+    // Rename the directory to the MNEDS 0.1.0 specificed path
+    val artDir = baseDir / platform
+    os.move(downloadedDir, artDir)
     // Record the version in a file
-    os.write(destDir / "version", firtoolVersion)
+    os.write(artDir / "version", firtoolVersion)
     PathRef(T.dest)
   }
 
   def resources = T { Seq(extracted()) }
-
-  //def bigSuffix = T { "[[[" + suffix() + "]]]" }
-  //def sources = T.sources(millSourcePath)
 }
 
-object firtoolResolver extends ScalaModule {
+object `firtool-resolver` extends ScalaModule {
   def scalaVersion = "2.13.11"
   def ivyDeps = Agg(
     ivy"dev.dirs:directories:26",
@@ -63,7 +92,7 @@ object firtoolResolver extends ScalaModule {
     ivy"com.outr::scribe:3.11.5",
     ivy"io.get-coursier::coursier:2.1.5",
     // For testing
-    ivy"org.chipsalliance:llvmFirtoolNative-macos-x86:1.44.0-SNAPSHOT"
+    ivy"org.chipsalliance:llvm-firtool-native-macos-x64:1.48.0-SNAPSHOT"
   )
   //object test extends ScalaTests {
   //  def ivyDeps = Agg(ivy"com.lihaoyi::utest:0.7.11")

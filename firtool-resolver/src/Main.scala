@@ -1,7 +1,5 @@
-//> using scala "2.13.11"
-//> using lib "org.chipsalliance:llvmFirtoolNative-macos-x86:1.44.0-SNAPSHOT"
-//> using lib "com.lihaoyi::os-lib:0.9.1"
-//> using lib "dev.dirs:directories:26"
+
+// SPDX-License-Identifier: Apache-2.0
 
 package firtoolresolver
 
@@ -25,10 +23,20 @@ final case class FirtoolBinary(path: File, version: String)
   */
 object Resolve {
 
+  private val operatingSystem: String = {
+    // Mac OS X
+    // Linux
+    System.getProperty("os.name").toLowerCase
+  }
+  private val architecture: String = {
+    // amd64, x86_64
+    System.getProperty("os.arch").toLowerCase
+  }
+
   // Important constants
-  private val binaryName = "firtool"
+  private def binaryName = "firtool"
   private val VersionRegex = """^CIRCT firtool-(\S+)$""".r
-  private val baseDir: String = {
+  private def baseDir: String = {
     val path = sys.env.getOrElse("FIRTOOL_CACHE", ProjectDirectories.from("org", "llvm", "firtool").cacheDir)
     new File(path).getAbsolutePath()
   }
@@ -144,5 +152,5 @@ object Main extends App {
   scribe.Logger.root
       .withMinimumLevel(scribe.Level.Debug)
       .replace()
-  println(Resolve("1.44.0"))
+  println(Resolve("1.48.0"))
 }
