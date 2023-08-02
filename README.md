@@ -13,8 +13,11 @@ This specification follows [Semantic Versioning 2.0.0](https://semver.org).
 1. The defined operating systems are `linux`, `windows`, and `macos`.
 1. The defined architectures are `x86` and `aarch64`.
 1. A Project SHALL have a `groupId`, `artifactId`, and `version`.
-1. A Project MAY support any number of `operating system` and `architecture` combinations.
-1. Artifacts SHALL be published as one-or-more [Maven Artifacts](https://maven.apache.org/repositories/artifacts.html), where the Maven `artifactId` SHALL be suffixed with `-<platform>`.
+1. A Project MAY support any number of `Platforms`.
+1. Artifacts SHALL be published as one-or-more [Maven Artifacts](https://maven.apache.org/repositories/artifacts.html)
+    1. The Maven Artifact `groupId` SHALL be the same as the project `groupId`.
+    1. The Maven Artifact `artifactId` SHALL be the project `artifactId` suffixed with `-<platform>`.
+    1. The Maven Artifact `version` SHALL be the project `version` and MAY include a suffix starting with `-`.
 1. The artifact `baseDirectory` is defined to be `<groupId>/<artifactId>`.
 1. The artifact `artifactDirectory` is defined to be `<baseDirectory>/<platform>`.
 1. The `baseDirectory` SHALL contain a file called `MNDDS.version` containing only the version of this specification adhered to by the artifact, encoded using UTF-8.

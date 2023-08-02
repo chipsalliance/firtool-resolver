@@ -8,7 +8,7 @@ val platforms = Seq[String](
   "windows-x64"
 )
 
-object `llvm-firtool-native` extends Cross[LLVMFirtoolNativeModule](platforms)
+object `llvm-firtool` extends Cross[LLVMFirtoolNativeModule](platforms)
 
 trait LLVMFirtoolNativeModule extends Cross.Module[String] with JavaModule with PublishModule {
 
@@ -92,7 +92,7 @@ object `firtool-resolver` extends ScalaModule {
     ivy"com.outr::scribe:3.11.5",
     ivy"io.get-coursier::coursier:2.1.5",
     // For testing
-    ivy"org.chipsalliance:llvm-firtool-native-macos-x64:1.48.0-SNAPSHOT"
+    //ivy"org.chipsalliance:llvm-firtool-macos-x64:1.48.0-SNAPSHOT"
   )
   //object test extends ScalaTests {
   //  def ivyDeps = Agg(ivy"com.lihaoyi::utest:0.7.11")
