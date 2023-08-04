@@ -1,0 +1,44 @@
+name: Continuous Integration
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  ci:
+    name: Run Tests
+    strategy:
+      matrix:
+        runner: ["ubuntu-20.04"]
+        include:
+          - runner: ubuntu-20.04
+            os: linux
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install FileCheck
+        run: |
+          mkdir bin
+          cd bin
+          BIN=FileCheck-${{ matrix.os }}-${{ matrix.arch }}
+          wget https://github.com/jackkoenig/FileCheck/releases/download/FileCheck-16.0.6/$BIN
+          mv $BIN FileCheck
+          chmod +x FileCheck
+          echo "$(pwd)" >> $GITHUB_PATH
+          ./FileCheck --version
+          cd ..
+      - name: Install Coursier and Mill
+        uses: coursier/setup-action@v1
+        with:
+          jvm: adopt:11
+          apps: mill
+      - name: Run Test
+        run: |
+          # First run of mill is important to set itself up
+          mill resolve _
+          ./firtool-resolver/test/run_tests.sh
+
