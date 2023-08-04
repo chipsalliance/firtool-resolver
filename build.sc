@@ -14,6 +14,9 @@ object Platform {
   implicit val rw: ReadWriter[Platform] = macroRW
 }
 
+// Release SNAPSHOT with:
+// mill mill.scalalib.PublishModule/publishAll llvm-firtool.publishArtifacts $SONATYPE_USERNAME:$SONATYPE_PASSWORD --sonatypeSnapshotUri https://s01.oss.sonatype.org/content/repositories/snapshots --signed false --release false
+// See docs: https://mill-build.com/mill/Scala_Build_Examples.html#_publish_module
 object `llvm-firtool` extends JavaModule with PublishModule {
 
   def firtoolVersion = "1.48.0"
