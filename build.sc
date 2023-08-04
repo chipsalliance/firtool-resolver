@@ -37,7 +37,7 @@ object `llvm-firtool` extends JavaModule with PublishModule {
 
   def pomSettings = PomSettings(
     description = "Package of native firtool binary",
-    organization = groupId,
+    organization = "org.chipsalliance",
     url = "https://chipsalliance.org",
     licenses = Seq(License.`Apache-2.0`),
     versionControl = VersionControl.github("chipsalliance", "llvm-firtool"),
@@ -84,6 +84,17 @@ object `llvm-firtool` extends JavaModule with PublishModule {
       // Rename the directory to the MNEDS 0.1.0 specificed path
       val artDir = baseDir / platform.toString
       os.move(downloadedDir, artDir)
+
+      // If on windows, rename firtool.exe to firtool
+      if (platform.os == "windows") {
+        os.walk(artDir).foreach { path =>
+          if (path.baseName == "firtool" && path.ext == "exe") {
+            // OS lib doesn't seem to have a way to get the directory
+            val parent = os.Path(path.toIO.getParentFile)
+            os.move(path, parent / path.baseName)
+          }
+        }
+      }
 
       platform -> PathRef(dir)
     }
@@ -139,8 +150,22 @@ object `llvm-firtool` extends JavaModule with PublishModule {
   }
 }
 
-object `firtool-resolver` extends ScalaModule {
+object `firtool-resolver` extends ScalaModule with PublishModule {
   def scalaVersion = "2.13.11"
+
+  def publishVersion = "0.1.0-SNAPSHOT"
+
+  def pomSettings = PomSettings(
+    description = "Fetcher for native firtool binary",
+    organization = "org.chipsalliance",
+    url = "https://chipsalliance.org",
+    licenses = Seq(License.`Apache-2.0`),
+    versionControl = VersionControl.github("chipsalliance", "llvm-firtool"),
+    developers = Seq(
+      Developer("jackkoenig", "Jack Koenig", "https://github.com/jackkoenig")
+    )
+  )
+
   def ivyDeps = Agg(
     ivy"dev.dirs:directories:26",
     ivy"com.lihaoyi::os-lib:0.9.1",
