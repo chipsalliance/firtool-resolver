@@ -11,19 +11,20 @@ This specification follows [Semantic Versioning 2.0.0](https://semver.org).
 
 1. `Platforms` are defined to be a tuple of a `operating system` and an `architecture` written as `<os>-<arch>` which can also be written as `<platform>`.
 1. The defined operating systems are `linux`, `windows`, and `macos`.
-1. The defined architectures are `x86` and `aarch64`.
+1. The defined architectures are `x64` and `aarch64`.
 1. A Project SHALL have a `groupId`, `artifactId`, and `version`.
 1. A Project MAY support any number of `Platforms`.
-1. Artifacts SHALL be published as one-or-more [Maven Artifacts](https://maven.apache.org/repositories/artifacts.html)
+1. Artifacts SHALL be published as a [Maven Artifact](https://maven.apache.org/repositories/artifacts.html)
     1. The Maven Artifact `groupId` SHALL be the same as the project `groupId`.
-    1. The Maven Artifact `artifactId` SHALL be the project `artifactId` suffixed with `-<platform>`.
+    1. The Maven Artifact `artifactId` SHALL be the project `artifactId`.
     1. The Maven Artifact `version` SHALL be the project `version` and MAY include a suffix starting with `-`.
-1. The artifact `baseDirectory` is defined to be `<groupId>/<artifactId>`.
-1. The artifact `artifactDirectory` is defined to be `<baseDirectory>/<platform>`.
+    1. The Maven Artifact MAY include additional jars distinguished by classifiers corresponding to supported `Platforms`.
+1. The Maven Artifact SHALL contain a `baseDirectory` defined to be `<groupId>/<artifactId>`.
+1. The Maven Artifact SHALL contain one or more `artifactDirectories` defined to be `<baseDirectory>/<platform>` (for each supported `Platform`).
 1. The `baseDirectory` SHALL contain a file called `MNDDS.version` containing only the version of this specification adhered to by the artifact, encoded using UTF-8.
-1. Maven Artifacts published for various `Platforms` for a single Artifact must conform to the same version of this specification.
-1. The `artifactDirectory` SHALL contain a file called `version` containing only the `version` of the artifact, encoded using UTF-8.
-1. The `artifactDirectory` MAY contain any other project-specific files including executables compiled for the specific `<platform>`.
+1. The `baseDirectory` SHALL contain a file called `project.version` containing only the `version` of the artifact, encoded using UTF-8.
+1. Maven Artifacts published for various `Platforms` for a single Artifact must conform to the same `MNDDS.version` and `project.version`.
+1. The `artifactDirectory` for each supported `Platform` MAY contain any other project-specific files including executables compiled for the specific `<platform>`.
 
 ## Revision History
 
