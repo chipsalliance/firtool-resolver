@@ -97,8 +97,7 @@ object Resolve {
           Left("Failed to determine firtool binary version")
         } else {
           val v = version.get
-          val absPath = (new File(binaryName)).getAbsolutePath
-          Right(FirtoolBinary(new File(absPath), v))
+          Right(FirtoolBinary(binary.toIO, v))
         }
     }
   }
