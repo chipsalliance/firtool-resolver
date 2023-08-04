@@ -148,7 +148,11 @@ object Resolve {
       val resourceBin = artDir / "bin" / "firtool"
       val result = Try {
         os.makeDir.all(destDir)
-        os.write(destBin, os.read.stream(resourceBin), perms = "rwxrwxr-x")
+        os.write(destBin, os.read.stream(resourceBin))
+        // os-lib only supports posix permissions, use java.io to support Windows
+        destFile.setWritable(true)
+        destFile.setReadable(true)
+        destFile.setExecutable(true)
       }
       if (result.isFailure) {
         val msg = s"Copying firtool failed with ${result.failed.get}"
