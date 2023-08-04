@@ -23,20 +23,34 @@ final case class FirtoolBinary(path: File, version: String)
   */
 object Resolve {
 
-  private val operatingSystem: String = {
+  private lazy val operatingSystem: Either[String, String] = {
     // Mac OS X
     // Linux
-    System.getProperty("os.name").toLowerCase
+    val osName = System.getProperty("os.name")
+    val name = osName.toLowerCase
+    if (name.startsWith("win")) Right("windows")
+    else if (name.startsWith("mac")) Right("macos")
+    else if (name.startsWith("linux")) Right("linux")
+    else Left(s"Unsupported OS: $osName")
   }
-  private val architecture: String = {
+  private lazy val architecture: Either[String, String] = {
     // amd64, x86_64
-    System.getProperty("os.arch").toLowerCase
+    // aarch64
+    val osArch = System.getProperty("os.arch")
+    val arch = osArch.toLowerCase
+    if (arch == "amd64" || arch == "x86_64") Right("x64")
+    else if (arch == "aarch64") Right("aarch64")
+    else Left(s"Unsupported architecture: $osArch")
   }
 
   // Important constants
   private def groupId = "org.chipsalliance"
   private def artId = "llvm-firtool"
-  private def platform = "macos-x64" // TODO derive this
+  private def platform: Either[String, String] =
+    for {
+      os <- operatingSystem
+      arch <- architecture
+    } yield s"$os-$arch"
   private def binaryName = "firtool"
   private val VersionRegex = """^CIRCT firtool-(\S+)$""".r
 
@@ -89,13 +103,16 @@ object Resolve {
     }
   }
 
-  private def checkResources(classloader: Option[URLClassLoader], logger: Logger, defaultVersion: String): Either[String, FirtoolBinary] = {
+  private def checkResources(classloader: Option[URLClassLoader], logger: Logger): Either[String, FirtoolBinary] = {
     logger.debug("Checking resources for firtool")
+    if (platform.isLeft) {
+      logger.debug(platform.merge)
+      return Left(platform.merge) // Help out the type system
+    }
     val resources = classloader.map(os.resource(_)).getOrElse(os.resource)
     val baseDir = resources / groupId / artId
-    val artDir = baseDir / platform
-    val versionFile = artDir / "version"
-    // TODO try-catch this
+    val artDir = baseDir / platform.toOption.get // checked above
+    val versionFile = baseDir / "project.version"
     val versionOpt = Try(os.read(versionFile)).toOption
     if (versionOpt.isEmpty) {
       val msg = s"firtool version not found in resources ($versionFile)"
@@ -134,12 +151,14 @@ object Resolve {
 
   private def fetchArtifact(logger: Logger, defaultVersion: String): Either[String, FirtoolBinary] = {
     val org = Organization(groupId)
-    val module = Module(org, ModuleName(s"$artId-$platform"), Map())
-    val dep = Dependency(module, defaultVersion + "-SNAPSHOT") // TODO delete -SNAPSHOT
+    val module = Module(org, ModuleName(s"$artId"), Map())
+    val dep = Dependency(module, defaultVersion)
     logger.debug(s"Attempting to fetch ${dep.module}:${dep.version}")
     val resolution = Try {
       coursier.Fetch()
       .addDependencies(dep)
+      // TODO classifier doesn't seem to work...
+      //.withClassifier(Classifier(platform))
       .run()
     }
     if (resolution.isFailure) {
@@ -147,23 +166,32 @@ object Resolve {
       logger.debug(msg)
       return Left(msg)
     }
+    // Head here is dangerous, without the classifier, multiple jars are fetched
     val jar = resolution.get.head
     logger.debug(s"Successfully fetched $jar")
 
 
     logger.debug(s"Loading $jar to search its resources")
     val classloader = new URLClassLoader(Array(jar.toURL))
-    checkResources(Some(classloader), logger, defaultVersion)
+    checkResources(Some(classloader), logger)
   }
 
-  def apply(defaultVersion: String): Either[String, FirtoolBinary] = apply(Logger("FirtoolResolver"), defaultVersion)
+  /** Lookup firtool binary
+    *
+    * @param defaultVersion fallback version to fetch if not found in FIRTOOL_PATH nor on classpath
+    * @param verbose print verbose logging information
+    * @return Either an error message or the firtool binary
+    */
+  def apply(defaultVersion: String, verbose: Boolean = false): Either[String, FirtoolBinary] = {
+    val base = Logger("FirtoolResolver")
+    val logger = if (verbose) base.withMinimumLevel(scribe.Level.Debug) else base
+    apply(logger, defaultVersion)
+  }
 
   def apply(logger: Logger, defaultVersion: String): Either[String, FirtoolBinary] = {
-
-    // TODO if firtool is found but version lookup fails, should we just return error?
     for {
       msg1 <- checkPath(logger).left
-      msg2 <- checkResources(None, logger, defaultVersion).left
+      msg2 <- checkResources(None, logger).left
       msg3 <- fetchArtifact(logger, defaultVersion).left
     } yield {
       s"Failed to fetch firtool:\n$msg1\n$msg2\n$msg3"
@@ -173,8 +201,27 @@ object Resolve {
 
 
 object Main extends App {
-  scribe.Logger.root
-      .withMinimumLevel(scribe.Level.Debug)
-      .replace()
-  println(Resolve("1.48.0"))
+  def usageErr(): Nothing = {
+    System.err.println("USAGE: firtool-resolver [-v] <version>")
+    sys.exit(1)
+  }
+  // Trying to avoid argument parser dependency if possible, just contributes to dependency hell
+  val (verbose, version) =
+    args.size match {
+      case 1 =>
+        (false, args(0))
+      case 2 =>
+        if (args(0) != "-v") {
+          usageErr()
+        }
+        (true, args(1))
+      case _ =>
+        usageErr()
+    }
+  Resolve(version, verbose = verbose) match {
+    case Right(bin) => println(bin.path)
+    case Left(err) =>
+      System.err.println(err)
+      sys.exit(1)
+  }
 }
