@@ -46,10 +46,20 @@ object Resolve {
   // Important constants
   private def groupId = "org.chipsalliance"
   private def artId = "llvm-firtool"
-  private def platform: Either[String, String] =
+  // Use x64 for Apple Silicon
+  private def appleSiliconFixup(logger: Logger, os: String, arch: String): String = {
+    if (os == "macos" && arch == "aarch64") {
+      logger.debug("Using x64 architecture for Apple silicon")
+      "x64"
+    } else {
+      arch
+    }
+  }
+  private def determinePlatform(logger: Logger): Either[String, String] =
     for {
       os <- operatingSystem
-      arch <- architecture
+      _arch <- architecture
+      arch = appleSiliconFixup(logger, os, _arch)
     } yield s"$os-$arch"
   private def binaryName = "firtool"
   private val VersionRegex = """^CIRCT firtool-(\S+)$""".r
@@ -103,6 +113,7 @@ object Resolve {
   }
 
   private def checkResources(classloader: Option[URLClassLoader], logger: Logger): Either[String, FirtoolBinary] = {
+    val platform = determinePlatform(logger)
     logger.debug("Checking resources for firtool")
     if (platform.isLeft) {
       logger.debug(platform.merge)
