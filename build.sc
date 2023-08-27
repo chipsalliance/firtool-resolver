@@ -19,13 +19,13 @@ object Platform {
 // See docs: https://mill-build.com/mill/Scala_Build_Examples.html#_publish_module
 object `llvm-firtool` extends JavaModule with PublishModule {
 
-  def firtoolVersion = "1.48.0"
-  // MNDDS requires that the publish version start with firtool version with optional -<suffix>
+  def firtoolVersion = "1.52.0"
+  // FNDDS requires that the publish version start with firtool version with optional -<suffix>
   def publishSuffix = "-SNAPSHOT"
   require(publishSuffix.headOption.forall(_ == '-'), s"suffix must start with -, got '$publishSuffix'")
   def publishVersion = firtoolVersion + publishSuffix
 
-  private def MNDDSSpecVersion = "0.1.0"
+  private def FNDDSSpecVersion = "1.0.0"
   private def groupId = "org.chipsalliance"
   // artifactId is the the name of this object
   private def artId = "llvm-firtool"
@@ -84,7 +84,7 @@ object `llvm-firtool` extends JavaModule with PublishModule {
       val baseDir = getBaseDir(dir)
       os.makeDir.all(baseDir)
 
-      // Rename the directory to the MNEDS 0.1.0 specificed path
+      // Rename the directory to the FNNDS specificed path
       val artDir = baseDir / platform.toString
       os.move(downloadedDir, artDir)
 
@@ -120,7 +120,7 @@ object `llvm-firtool` extends JavaModule with PublishModule {
       val jarPath = T.dest / s"$platform.jar"
       Jvm.createJar(
         jarPath,
-        Agg(dir.path, mnddsMetadata().path),
+        Agg(dir.path, fnddsMetadata().path),
         mill.api.JarManifest.MillDefault,
         (_, _) => true
       )
@@ -139,24 +139,24 @@ object `llvm-firtool` extends JavaModule with PublishModule {
     }
   }
 
-  def mnddsMetadata = T {
+  def fnddsMetadata = T {
     // Then get the baseDir from there
     val baseDir = getBaseDir(T.dest)
     os.makeDir.all(baseDir)
-    os.write(baseDir / "MNDDS.version", MNDDSSpecVersion)
-    os.write(baseDir / "project.version", firtoolVersion)
+    os.write(baseDir / "FNDDS.version", FNDDSSpecVersion)
+    os.write(baseDir / "project.version", publishVersion())
     PathRef(T.dest)
   }
 
   def localClasspath = T {
-    super.localClasspath() ++ extractedDirs().map { case (_, dir) => dir } ++ Seq(mnddsMetadata())
+    super.localClasspath() ++ extractedDirs().map { case (_, dir) => dir } ++ Seq(fnddsMetadata())
   }
 }
 
 object `firtool-resolver` extends ScalaModule with PublishModule {
   def scalaVersion = "2.13.11"
 
-  def publishVersion = "0.1.0-SNAPSHOT"
+  def publishVersion = "1.0.0-SNAPSHOT"
 
   def pomSettings = PomSettings(
     description = "Fetcher for native firtool binary",
@@ -174,8 +174,5 @@ object `firtool-resolver` extends ScalaModule with PublishModule {
     ivy"com.lihaoyi::os-lib:0.9.1",
     ivy"com.outr::scribe:3.11.5",
     ivy"io.get-coursier::coursier:2.1.5",
-    // For testing
-    //ivy"org.chipsalliance:llvm-firtool:1.48.0-SNAPSHOT;classifier=macos-x64",
-    //ivy"org.chipsalliance:llvm-firtool:1.48.0-SNAPSHOT",
   )
 }
