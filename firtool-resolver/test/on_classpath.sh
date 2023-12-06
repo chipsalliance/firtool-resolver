@@ -14,4 +14,4 @@ cs launch --scala 2.13.11 \
 # CHECK: Checking resources for firtool
 # CHECK: Firtool version [[LLVM_FIRTOOL_VERSION]] found in resources
 $FIRTOOL --version
-# CHECK: CIRCT firtool-[[LLVM_FIRTOOL_VERSION]]
+# CHECK: CIRCT firtool-[[FIRTOOL_VERSION]]

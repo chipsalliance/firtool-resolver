@@ -24,4 +24,4 @@ cs launch --scala 2.13.11 \
 # CHECK-NOT: FIRTOOL_PATH not set
 # CHECK-NOT: Checking resources for firtool
 $FIRTOOL --version
-# CHECK: CIRCT firtool-[[LLVM_FIRTOOL_VERSION]]
+# CHECK: CIRCT firtool-[[FIRTOOL_VERSION]]

@@ -14,8 +14,9 @@ cs launch --scala 2.13.11 \
 # CHECK: firtool version not found in resources
 # CHECK: Attempting to fetch org.chipsalliance:llvm-firtool:[[LLVM_FIRTOOL_VERSION]]
 # CHECK: Successfully fetched
-# CHECK: Loading {{.*}} to search its resources
+# CHECK: Loading
+# CHECK: to search its resources
 # CHECK: Checking resources for firtool
 # CHECK: Firtool version [[LLVM_FIRTOOL_VERSION]] found in resources
 $FIRTOOL --version
-# CHECK: CIRCT firtool-[[LLVM_FIRTOOL_VERSION]]
+# CHECK: CIRCT firtool-[[FIRTOOL_VERSION]]
