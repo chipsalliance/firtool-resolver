@@ -14,14 +14,20 @@ object Platform {
   implicit val rw: ReadWriter[Platform] = macroRW
 }
 
+// Must run mill with -i because it uses environment variables:
+// LLVM_FIRTOOL_VERSION - (eg. 1.58.0)
+// LLVM_FIRTOOL_PRERELEASE - 0 means real release (non-SNAPSHOT), otherwise is -SNAPSHOT
 // Release SNAPSHOT with:
 // mill mill.scalalib.PublishModule/publishAll llvm-firtool.publishArtifacts $SONATYPE_USERNAME:$SONATYPE_PASSWORD --sonatypeSnapshotUri https://s01.oss.sonatype.org/content/repositories/snapshots --signed false --release false
 // See docs: https://mill-build.com/mill/Scala_Build_Examples.html#_publish_module
 object `llvm-firtool` extends JavaModule with PublishModule {
 
-  def firtoolVersion = "1.52.0"
+  private def getEnvVariable(name: String): String =
+    sys.env.get(name).getOrElse(s"Environment variable $name must be defined!")
+
+  def firtoolVersion = getEnvVariable("LLVM_FIRTOOL_VERSION")
   // FNDDS requires that the publish version start with firtool version with optional -<suffix>
-  def publishSuffix = "-SNAPSHOT"
+  def publishSuffix = if (getEnvVariable("LLVM_FIRTOOL_PRERELEASE") == "0") "" else  "-SNAPSHOT"
   require(publishSuffix.headOption.forall(_ == '-'), s"suffix must start with -, got '$publishSuffix'")
   def publishVersion = firtoolVersion + publishSuffix
 
