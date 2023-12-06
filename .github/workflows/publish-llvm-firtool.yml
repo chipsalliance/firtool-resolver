@@ -1,0 +1,84 @@
+name: Publish LLVM Firtool
+
+on:
+  # workflow_dispatch and workflow_call arguments should be kept identical
+  # https://github.com/orgs/community/discussions/39357
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'The version of firtool and llvm-firtool to publish'
+        required: true
+        type: string
+      snapshot:
+        description: 'Should the version of llvm-resolver be a SNAPSHOT'
+        default: true
+        required: true
+        type: boolean
+  workflow_call:
+    inputs:
+      version:
+        description: 'The version of firtool and llvm-firtool to publish'
+        required: true
+        type: string
+      snapshot:
+        description: 'Should the version of llvm-resolver be a SNAPSHOT'
+        default: true
+        required: true
+        type: boolean
+
+jobs:
+  test:
+    name: Run Tests
+    uses: ./.github/workflows/test.yml
+    with:
+      version: ${{ inputs.version }}
+      snapshot: ${{ inputs.snapshot }}
+
+  publish:
+    name: Publish LLVM Firtool
+    runs-on: ubuntu-20.04
+   needs: test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install Scala and Coursier
+        uses: coursier/setup-action@v1
+        with:
+          jvm: adopt:11
+      - name: Check if already published
+        if: ! inputs.snapshot
+        # TODO skip if snapshot
+        run: |
+          if cs fetch org.chipsalliance:llvm-firtool:${{ inputs.version }} ; then
+            echo "llvm-firtool version ${{ inputs.version }} has already been published!" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
+            exit 0
+          fi
+      - name: Set versions
+        shell: bash
+        run: |
+          if [[ "${{ inputs.snapshot }}" = 'true' ]]; then
+            IS_PRERELEASE=1
+          else
+            IS_PRERELEASE=0
+          fi
+          echo "LLVM_FIRTOOL_PRERELEASE=$IS_PRERELEASE" >> "$GITHUB_ENV"
+          echo "LLVM_FIRTOOL_VERSION=${{ inputs.version }}" >> "$GITHUB_ENV"
+      - name: Import GPG key
+        # This is crazy-max/ghaction-import-gpg@v6, using commit for security reasons
+        uses: crazy-max/ghaction-import-gpg@82a020f1f7f605c65dd2449b392a52c3fcfef7ef
+        with:
+          gpg_private_key: ${{ secrets.PGP_SECRET }}
+          passphrase: ${{ secrets.PGP_PASSPHRASE }}
+      - name: Publish
+        shell: bash
+        run: |
+          ./mill -i llvm-firtool.publishSigned
+        env:
+          PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
+          PGP_SECRET: ${{ secrets.PGP_SECRET }}
+          SONATYPE_PASSWORD: ${{ secrets.CHIPSALLIANCE_SONATYPE_PASSWORD }}
+          SONATYPE_USERNAME: ${{ secrets.CHIPSALLIANCE_SONATYPE_USERNAME }}
+
