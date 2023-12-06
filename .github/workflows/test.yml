@@ -1,0 +1,74 @@
+name: Test
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'The version of firtool and llvm-firtool to test'
+        required: true
+        type: string
+      snapshot:
+        description: 'Should the version of llvm-resolver be a SNAPSHOT'
+        default: 'true'
+        required: true
+        type: string
+
+jobs:
+  ci:
+    name: Run Tests
+    strategy:
+      matrix:
+        runner: ["ubuntu-20.04", "macos-11", "windows-2019"]
+        include:
+          - runner: ubuntu-20.04
+            os: linux
+            arch: x64
+            ext: ""
+          - runner: macos-11
+            os: macos
+            arch: x64
+            ext: ""
+          - runner: windows-2019
+            os: windows
+            arch: x64
+            ext: ".exe"
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install wget (Windows)
+        if: matrix.os == 'windows'
+        run: choco install wget
+      - name: Install FileCheck
+        shell: bash
+        run: |
+          mkdir bin
+          cd bin
+          BIN=FileCheck-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}
+          wget https://github.com/jackkoenig/FileCheck/releases/download/FileCheck-16.0.6/$BIN
+          mv $BIN FileCheck
+          chmod +x FileCheck
+          echo "$(pwd)" >> $GITHUB_PATH
+          ./FileCheck --version
+          cd ..
+      - name: Install Scala and Coursier
+        uses: coursier/setup-action@v1
+        with:
+          jvm: adopt:11
+      - name: Set versions
+        shell: bash
+        run: |
+          if [[ "${{ inputs.snapshot }}" = 'true' ]]; then
+            IS_PRERELEASE=1
+          else
+            IS_PRERELEASE=0
+          fi
+          echo "LLVM_FIRTOOL_PRERELEASE=$IS_PRERELEASE" >> "$GITHUB_ENV"
+          echo "LLVM_FIRTOOL_VERSION=${{ inputs.version }}" >> "$GITHUB_ENV"
+      - name: Run Test
+        shell: bash
+        run: |
+          # First run of mill is important to set itself up
+          ./mill resolve _
+          ./firtool-resolver/test/run_tests.sh ${{ matrix.os }}
+
