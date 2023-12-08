@@ -37,7 +37,7 @@ jobs:
   publish:
     name: Publish LLVM Firtool
     runs-on: ubuntu-20.04
-   needs: test
+    needs: test
 
     steps:
       - name: Checkout
@@ -47,7 +47,7 @@ jobs:
         with:
           jvm: adopt:11
       - name: Check if already published
-        if: ! inputs.snapshot
+        if: ${{ ! inputs.snapshot }}
         # TODO skip if snapshot
         run: |
           if cs fetch org.chipsalliance:llvm-firtool:${{ inputs.version }} ; then
