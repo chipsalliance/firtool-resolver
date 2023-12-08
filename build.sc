@@ -14,21 +14,42 @@ object Platform {
   implicit val rw: ReadWriter[Platform] = macroRW
 }
 
+trait ChipsAlliancePublishModule extends PublishModule {
+
+  def isSnapshot: Boolean
+
+  override def sonatypeUri: String = "https://s01.oss.sonatype.org/service/local"
+  override def sonatypeSnapshotUri: String = "https://s01.oss.sonatype.org/content/repositories/snapshots"
+  protected def getEnvVariable(name: String): String =
+    sys.env.get(name).getOrElse(s"Environment variable $name must be defined!")
+
+  def gpgArgs: Seq[String] = Seq(
+    "--detach-sign",
+    "--batch=true",
+    "--yes",
+    "--passphrase",
+    getEnvVariable("PGP_PASSPHRASE"),
+    "--armor",
+    "--use-agent"
+  )
+
+  // Helper for publishing, sets values so we don't have to set them on the command-line
+  def publishSigned() = T.command {
+    val release = !isSnapshot
+    publish(gpgArgs = gpgArgs, release = release)
+  }
+}
+
 // Must run mill with -i because it uses environment variables:
 // LLVM_FIRTOOL_VERSION - (eg. 1.58.0)
 // LLVM_FIRTOOL_PRERELEASE - 0 means real release (non-SNAPSHOT), otherwise is -SNAPSHOT
-// Release SNAPSHOT with:
-// mill mill.scalalib.PublishModule/publishAll llvm-firtool.publishArtifacts $SONATYPE_USERNAME:$SONATYPE_PASSWORD --sonatypeSnapshotUri https://s01.oss.sonatype.org/content/repositories/snapshots --signed false --release false
-// See docs: https://mill-build.com/mill/Scala_Build_Examples.html#_publish_module
-object `llvm-firtool` extends JavaModule with PublishModule {
-
-  private def getEnvVariable(name: String): String =
-    sys.env.get(name).getOrElse(s"Environment variable $name must be defined!")
+object `llvm-firtool` extends JavaModule with ChipsAlliancePublishModule {
 
   def firtoolVersion = getEnvVariable("LLVM_FIRTOOL_VERSION")
   // FNDDS requires that the publish version start with firtool version with optional -<suffix>
-  def publishSuffix = if (getEnvVariable("LLVM_FIRTOOL_PRERELEASE") == "0") "" else  "-SNAPSHOT"
-  require(publishSuffix.headOption.forall(_ == '-'), s"suffix must start with -, got '$publishSuffix'")
+  def isSnapshot = getEnvVariable("LLVM_FIRTOOL_PRERELEASE") != "0"
+
+  def publishSuffix = if (isSnapshot) "-SNAPSHOT" else ""
   def publishVersion = firtoolVersion + publishSuffix
 
   private def FNDDSSpecVersion = "1.0.0"
@@ -159,10 +180,12 @@ object `llvm-firtool` extends JavaModule with PublishModule {
   }
 }
 
-object `firtool-resolver` extends ScalaModule with PublishModule {
+object `firtool-resolver` extends ScalaModule with ChipsAlliancePublishModule {
   def scalaVersion = "2.13.11"
 
   def publishVersion = "1.0.0-SNAPSHOT"
+
+  def isSnapshot = true
 
   def pomSettings = PomSettings(
     description = "Fetcher for native firtool binary",
