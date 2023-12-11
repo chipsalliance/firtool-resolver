@@ -1,0 +1,34 @@
+name: Publish Firtool Resolver
+
+on:
+  workflow_call:
+
+jobs:
+  # This assumes you've already run the tests
+  publish:
+    name: Publish Firtool Resolver
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install Scala and Coursier
+        uses: coursier/setup-action@v1
+        with:
+          jvm: adopt:11
+      - name: Import GPG key
+        # This is crazy-max/ghaction-import-gpg@v6, using commit for security reasons
+        uses: crazy-max/ghaction-import-gpg@82a020f1f7f605c65dd2449b392a52c3fcfef7ef
+        with:
+          gpg_private_key: ${{ secrets.PGP_SECRET }}
+          passphrase: ${{ secrets.PGP_PASSPHRASE }}
+      - name: Publish
+        shell: bash
+        run: |
+          ./mill -i firtool-resolver.publishSigned
+        env:
+          PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
+          PGP_SECRET: ${{ secrets.PGP_SECRET }}
+          SONATYPE_PASSWORD: ${{ secrets.CHIPSALLIANCE_SONATYPE_PASSWORD }}
+          SONATYPE_USERNAME: ${{ secrets.CHIPSALLIANCE_SONATYPE_USERNAME }}
+
