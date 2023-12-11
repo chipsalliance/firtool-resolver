@@ -197,8 +197,11 @@ object Resolve {
     * @return Either an error message or the firtool binary
     */
   def apply(defaultVersion: String, verbose: Boolean = false): Either[String, FirtoolBinary] = {
-    val base = Logger("FirtoolResolver").withHandler(formatter = scribe.format.Formatter.enhanced)
-    val logger = if (verbose) base.withMinimumLevel(scribe.Level.Debug) else base
+    val level = if (verbose) scribe.Level.Debug else scribe.Level.Warn
+    val logger =
+      Logger("FirtoolResolver")
+        .withHandler(formatter = scribe.format.Formatter.enhanced)
+        .withMinimumLevel(level)
     apply(logger, defaultVersion)
   }
 
