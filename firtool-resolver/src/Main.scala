@@ -140,24 +140,27 @@ object Resolve {
     val destFile: File = destBin.toIO
 
     // Check if binary already exists
-    if (destFile.isFile()) {
-      logger.debug(s"Firtool binary $destFile already exists")
-    } else {
-      // Copy
-      logger.debug(s"Copying firtool from resources to $destFile")
-      val resourceBin = artDir / "bin" / "firtool"
-      val result = Try {
-        os.makeDir.all(destDir)
-        os.write(destBin, os.read.stream(resourceBin))
-        // os-lib only supports posix permissions, use java.io to support Windows
-        destFile.setWritable(true)
-        destFile.setReadable(true)
-        destFile.setExecutable(true)
-      }
-      if (result.isFailure) {
-        val msg = s"Copying firtool failed with ${result.failed.get}"
-        logger.debug(msg)
-        return Left(msg)
+    // Copying a file is not thread-safe
+    this.synchronized {
+      if (destFile.isFile()) {
+        logger.debug(s"Firtool binary $destFile already exists")
+      } else {
+        // Copy
+        logger.debug(s"Copying firtool from resources to $destFile")
+        val resourceBin = artDir / "bin" / "firtool"
+        val result = Try {
+          os.makeDir.all(destDir)
+          os.write(destBin, os.read.stream(resourceBin))
+          // os-lib only supports posix permissions, use java.io to support Windows
+          destFile.setWritable(true)
+          destFile.setReadable(true)
+          destFile.setExecutable(true)
+        }
+        if (result.isFailure) {
+          val msg = s"Copying firtool failed with ${result.failed.get}"
+          logger.debug(msg)
+          return Left(msg)
+        }
       }
     }
     Right(FirtoolBinary(destFile, version))
