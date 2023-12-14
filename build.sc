@@ -4,7 +4,8 @@ import mill._
 import scalalib._
 import publish._
 import mill.util.Jvm
-
+import mill.scalalib.PublishModule.checkSonatypeCreds
+import mill.api.{Result}
 import $ivy.`de.tototec::de.tobiasroeser.mill.vcs.version::0.4.0`
 import de.tobiasroeser.mill.vcs.version.VcsVersion
 
@@ -19,12 +20,12 @@ object Platform {
 
 trait ChipsAlliancePublishModule extends PublishModule {
 
-  def isSnapshot: Boolean
+  def isSnapshot: T[Boolean]
 
   override def sonatypeUri: String = "https://s01.oss.sonatype.org/service/local"
   override def sonatypeSnapshotUri: String = "https://s01.oss.sonatype.org/content/repositories/snapshots"
   protected def getEnvVariable(name: String): String =
-    sys.env.get(name).getOrElse(s"Environment variable $name must be defined!")
+    sys.env.get(name).getOrElse(throw new Exception(s"Environment variable $name must be defined!"))
 
   def gpgArgs: Seq[String] = Seq(
     "--detach-sign",
@@ -36,10 +37,48 @@ trait ChipsAlliancePublishModule extends PublishModule {
     "--use-agent"
   )
 
+  // We cannot call publish from a Command so we inline it, derived from:
+  // https://github.com/com-lihaoyi/mill/blob/e4bcc274cff76534d9b7bdfe6238bd65fc1eaf45/scalalib/src/mill/scalalib/PublishModule.scala#L279
+  // Mill uses the MIT license
+  private def loadSonatypeCreds(): Task[String] = T.task {
+    (for {
+      username <- T.env.get("SONATYPE_USERNAME")
+      password <- T.env.get("SONATYPE_PASSWORD")
+    } yield {
+      Result.Success(s"$username:$password")
+    }).getOrElse(
+      Result.Failure(
+        "Consider using SONATYPE_USERNAME/SONATYPE_PASSWORD environment variables or passing `sonatypeCreds` argument"
+      )
+    )
+  }
+
   // Helper for publishing, sets values so we don't have to set them on the command-line
   def publishSigned() = T.command {
-    val release = !isSnapshot
-    publish(gpgArgs = gpgArgs, release = release)
+    val signed = true
+    val readTimeout: Int = 60000
+    val connectTimeout: Int = 5000
+    val awaitTimeout: Int = 120 * 1000
+    val stagingRelease: Boolean = true
+    val release = !isSnapshot()
+    // We cannot call publish from a Command so we inline it, derived from:
+    // https://github.com/com-lihaoyi/mill/blob/e4bcc274cff76534d9b7bdfe6238bd65fc1eaf45/scalalib/src/mill/scalalib/PublishModule.scala#L177
+    // Mill uses the MIT license
+    val PublishModule.PublishData(artifactInfo, artifacts) = publishArtifacts()
+    new SonatypePublisher(
+      sonatypeUri,
+      sonatypeSnapshotUri,
+      loadSonatypeCreds()(),
+      signed,
+      gpgArgs,
+      readTimeout,
+      connectTimeout,
+      T.log,
+      T.workspace,
+      T.env,
+      awaitTimeout,
+      stagingRelease
+    ).publish(artifacts.map { case (a, b) => (a.path, b) }, artifactInfo, release)
   }
 }
 
@@ -50,10 +89,10 @@ object `llvm-firtool` extends JavaModule with ChipsAlliancePublishModule {
 
   def firtoolVersion = getEnvVariable("LLVM_FIRTOOL_VERSION")
   // FNDDS requires that the publish version start with firtool version with optional -<suffix>
-  def isSnapshot = getEnvVariable("LLVM_FIRTOOL_PRERELEASE") != "0"
+  def isSnapshot = T { getEnvVariable("LLVM_FIRTOOL_PRERELEASE") != "0" }
 
-  def publishSuffix = if (isSnapshot) "-SNAPSHOT" else ""
-  def publishVersion = firtoolVersion + publishSuffix
+  def publishSuffix = T { if (isSnapshot()) "-SNAPSHOT" else "" }
+  def publishVersion = T { firtoolVersion + publishSuffix() }
 
   private def FNDDSSpecVersion = "1.0.0"
   private def groupId = "org.chipsalliance"
@@ -186,9 +225,9 @@ object `llvm-firtool` extends JavaModule with ChipsAlliancePublishModule {
 object `firtool-resolver` extends ScalaModule with ChipsAlliancePublishModule {
   def scalaVersion = "2.13.11"
 
-  def publishVersion = VcsVersion.vcsState().format()
+  def publishVersion = VcsVersion.vcsState().format(countSep = "+", untaggedSuffix = "-SNAPSHOT")
 
-  def isSnapshot = true
+  def isSnapshot = T { publishVersion().endsWith("-SNAPSHOT") }
 
   def pomSettings = PomSettings(
     description = "Fetcher for native firtool binary",
