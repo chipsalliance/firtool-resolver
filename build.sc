@@ -5,6 +5,9 @@ import scalalib._
 import publish._
 import mill.util.Jvm
 
+import $ivy.`de.tototec::de.tobiasroeser.mill.vcs.version::0.4.0`
+import de.tobiasroeser.mill.vcs.version.VcsVersion
+
 case class Platform(os: String, arch: String) {
   override def toString: String = s"$os-$arch"
 }
@@ -183,7 +186,7 @@ object `llvm-firtool` extends JavaModule with ChipsAlliancePublishModule {
 object `firtool-resolver` extends ScalaModule with ChipsAlliancePublishModule {
   def scalaVersion = "2.13.11"
 
-  def publishVersion = "1.0.0-SNAPSHOT"
+  def publishVersion = VcsVersion.vcsState().format()
 
   def isSnapshot = true
 
