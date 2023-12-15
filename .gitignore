@@ -1,0 +1,11 @@
+
+# Scala tooling related
+.bsp
+.bloop
+.metals
+.scala-build
+out
+
+# Editor related
+.vscode
+*.swp
