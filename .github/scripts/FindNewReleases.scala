@@ -61,8 +61,7 @@ object Releases {
 
   /** Time cutoff for what counts as a "new" release */
   val cutoffForNew: LocalDateTime =
-    // TODO change this to minus 2 days
-    LocalDateTime.now(java.time.ZoneOffset.UTC).minusDays(16)
+    LocalDateTime.now(java.time.ZoneOffset.UTC).minusDays(2)
 
   /** New releases are those published in the last 48 hours */
   def isNewRelease(release: Release): Boolean = {
