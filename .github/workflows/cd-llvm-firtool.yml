@@ -1,8 +1,6 @@
 name: Continuous Delivery of llvm-firtool
 
 on:
-  # TODO delete, this should only be workflow_dispatch and cron
-  pull_request:
   workflow_dispatch:
   # Run every 8 hours to balance compute with picking up new releases of llvm/circt
   schedule:
