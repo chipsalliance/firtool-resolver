@@ -19,8 +19,7 @@ jobs:
       - uses: VirtusLab/scala-cli-setup@v1
       - id: detect-versions
         run: |
-          scala-cli .github/scripts/FindNewReleases.scala -- versions.json
-          versions=$(cat versions.json)
+          versions=$(scala-cli .github/scripts/FindNewReleases.scala)
           echo "versions=$versions" >> $GITHUB_OUTPUT
     outputs:
       versions: ${{ steps.detect-versions.outputs.versions }}

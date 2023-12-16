@@ -2,7 +2,6 @@
 //> using lib "com.47deg::github4s:0.32.1"
 //> using lib "io.get-coursier::coursier:2.1.8"
 //> using lib "com.lihaoyi::upickle:3.1.3"
-//> using lib "com.lihaoyi::os-lib:0.9.2"
 //> using options "-unchecked", "-deprecation", "-feature", "-Xcheckinit", "-Xfatal-warnings", "-Ywarn-dead-code", "-Ywarn-unused"
 
 import cats.effect.IO
@@ -62,7 +61,8 @@ object Releases {
 
   /** Time cutoff for what counts as a "new" release */
   val cutoffForNew: LocalDateTime =
-    LocalDateTime.now(java.time.ZoneOffset.UTC).minusDays(2)
+    // TODO change this to minus 2 days
+    LocalDateTime.now(java.time.ZoneOffset.UTC).minusDays(16)
 
   /** New releases are those published in the last 48 hours */
   def isNewRelease(release: Release): Boolean = {
@@ -70,7 +70,7 @@ object Releases {
       val parsed = LocalDateTime.parse(time, ISO_DATE_TIME)
       parsed.isAfter(cutoffForNew)
     }
-    println(
+    System.err.println(
       s"Is ${release.tag_name} (${release.published_at}) new? " + isNew
         .getOrElse("<unpublished>")
     )
@@ -91,7 +91,7 @@ object Releases {
       } catch {
         case NonFatal(_) => false
       }
-    println(s"Has $version already been published? $exists")
+    System.err.println(s"Has $version already been published? $exists")
     exists
   }
 }
@@ -103,9 +103,8 @@ object Main extends App {
   val newReleases = r.takeWhile(Releases.isNewRelease)
   val unpublished = newReleases.filter(!Releases.isAlreadyPublished(_))
   val result = unpublished.map(Releases.getVersion).toList
-  println("We need to publish version(s): " + result.mkString(", "))
+  System.err.println("We need to publish version(s): " + result.mkString(", "))
 
   val jsonList = write(result)
-  val outputFile = java.nio.file.Paths.get(args(0)).toAbsolutePath
-  os.write.over(os.Path(outputFile), jsonList)
+  System.out.println(jsonList)
 }
