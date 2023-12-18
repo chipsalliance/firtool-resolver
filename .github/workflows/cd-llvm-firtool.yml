@@ -25,6 +25,7 @@ jobs:
   publish:
     name: Publish LLVM Firtool
     needs: detect
+    if: ${{ needs.detect.outputs.versions != '[]' }}
     strategy:
       matrix:
         version: ${{ fromJSON(needs.detect.outputs.versions) }}
