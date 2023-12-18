@@ -3,7 +3,7 @@
 
 package firtoolresolver
 
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 import java.io.File
 import java.net.URLClassLoader
 
@@ -69,7 +69,14 @@ object Resolve {
     new File(path).getAbsolutePath()
   }
 
-  private def checkPath(logger: Logger): Either[String, FirtoolBinary] = {
+  // Nested Either is weird but represents unrecoverable vs. recoverable errors
+  // Left(...) - unrecoverable error
+  // Right(Left(...)) - recoverable error
+  // Right(Right(...)) - success
+  private def checkFirtoolPath(logger: Logger): Either[String, Either[String, FirtoolBinary]] = {
+    def Recoverable(msg: String): Either[String, Either[String, FirtoolBinary]] = Right(Left(msg))
+    def Unrecoverable(msg: String): Either[String, Either[String, FirtoolBinary]] = Left(msg)
+
     logger.debug("Checking FIRTOOL_PATH for firtool")
 
     // TODO make this function more consistent between return and matching
@@ -77,14 +84,14 @@ object Resolve {
     if (firtoolPathOpt.isEmpty) {
       val msg = "FIRTOOL_PATH not set"
       logger.debug(msg)
-      return Left(msg)
+      return Recoverable(msg)
     }
 
     val firtoolPath = os.Path(firtoolPathOpt.get, os.pwd)
     if (!os.exists(firtoolPath)) {
       val msg = s"FIRTOOL_PATH ($firtoolPath) does not exist"
       logger.debug(msg)
-      return Left(msg)
+      return Unrecoverable(msg)
     }
 
     val binary = firtoolPath / binaryName
@@ -92,22 +99,27 @@ object Resolve {
     val proc = os.proc(binary, "--version")
     logger.debug(s"Running: ${proc.commandChunks.mkString(" ")}")
 
-    val resultOpt = Try(proc.call(mergeErrIntoOut=true, check=false)).toOption
-    resultOpt match {
-      case None =>
-        val msg = "Firtool binary not on FIRTOOL_PATH"
+    val result = Try(proc.call(mergeErrIntoOut=true, check=false))
+    result match {
+      case Failure(err) =>
+        val msg = err.getMessage
         logger.debug(msg)
-        Left(msg)
-      case Some(result) =>
+        Unrecoverable(msg)
+      case Success(result) =>
         val version = result.out.lines().collectFirst { case VersionRegex(v) => v }
 
-        if (result.exitCode != 0 || version.isEmpty) {
-          logger.debug(s"Exit Code: ${result.exitCode}")
-          logger.debug(s"Output: '${result.out.text()}'")
-          Left("Failed to determine firtool binary version")
+        if (result.exitCode != 0) {
+          val msg =
+            s"""|Unable to run firtool binary ($binary):
+                |  Exit Code: ${result.exitCode}
+                |  Output: '${result.out.text()}
+                |""".stripMargin
+          logger.debug(msg)
+          Unrecoverable(msg)
         } else {
-          val v = version.get
-          Right(FirtoolBinary(binary.toIO, v))
+          // If version regex fails, that's fine
+          val v = version.getOrElse("<unknown>")
+          Right(Right(FirtoolBinary(binary.toIO, v)))
         }
     }
   }
@@ -210,7 +222,12 @@ object Resolve {
 
   def apply(logger: Logger, defaultVersion: String): Either[String, FirtoolBinary] = {
     for {
-      msg1 <- checkPath(logger).left
+      // checkFirtoolPath has both recoverable and unrecoverable errors
+      // First <- does not have .left projection so that unrecoverable errors short-circuit
+      res <- checkFirtoolPath(logger)
+      // Left projections allow us to short-circuit on any Right, and otherwise aggregate errors
+      // returned in Left
+      msg1 <- res.left
       msg2 <- checkResources(None, logger).left
       msg3 <- fetchArtifact(logger, defaultVersion).left
     } yield {
