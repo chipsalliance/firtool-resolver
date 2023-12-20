@@ -10,6 +10,7 @@ import java.net.URLClassLoader
 import dev.dirs.{BaseDirectories, ProjectDirectories, UserDirectories}
 import scribe.Logger
 import coursier._
+import coursier.core.Extension
 
 final case class FirtoolBinary(path: File, version: String)
 
@@ -179,15 +180,26 @@ object Resolve {
   }
 
   private def fetchArtifact(logger: Logger, defaultVersion: String): Either[String, FirtoolBinary] = {
+    val platform =
+      determinePlatform(logger) match {
+        case Left(msg) =>
+          logger.debug(msg)
+          return Left(msg)
+        case Right(name) => name
+      }
+    // See coursier.parse.DependencyParser to understand how the classifier is added via Publication
     val org = Organization(groupId)
     val module = Module(org, ModuleName(s"$artId"), Map())
-    val dep = Dependency(module, defaultVersion)
-    logger.debug(s"Attempting to fetch ${dep.module}:${dep.version}")
+    val dep =
+      Dependency(module, defaultVersion)
+        .withPublication("", Type.empty, Extension.empty, Classifier(platform))
+    // One would think there'd be a built-in pretty print like this but there isn't
+    //   (coursier.util.Print doesn't include the classifier)
+    logger.debug(s"Attempting to fetch ${dep.module}:${dep.version},clasifier=${platform}")
+
     val resolution = Try {
       coursier.Fetch()
       .addDependencies(dep)
-      // TODO classifier doesn't seem to work...
-      //.withClassifier(Classifier(platform))
       .run()
     }
     if (resolution.isFailure) {
