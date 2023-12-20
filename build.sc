@@ -85,6 +85,8 @@ trait ChipsAlliancePublishModule extends PublishModule {
 // Must run mill with -i because it uses environment variables:
 // LLVM_FIRTOOL_VERSION - (eg. 1.58.0)
 // LLVM_FIRTOOL_PRERELEASE - 0 means real release (non-SNAPSHOT), otherwise is -SNAPSHOT
+// Maven appears to have an API for resolving classifiers at fetch time,
+// but it's not supported by Coursier: https://github.com/coursier/coursier/issues/2016
 object `llvm-firtool` extends JavaModule with ChipsAlliancePublishModule {
 
   def firtoolVersion = getEnvVariable("LLVM_FIRTOOL_VERSION")
