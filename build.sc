@@ -56,9 +56,9 @@ trait ChipsAlliancePublishModule extends PublishModule {
   // Helper for publishing, sets values so we don't have to set them on the command-line
   def publishSigned() = T.command {
     val signed = true
-    val readTimeout: Int = 60000
-    val connectTimeout: Int = 5000
-    val awaitTimeout: Int = 120 * 1000
+    val readTimeout: Int = 2 * 60 * 1000
+    val connectTimeout: Int = 10 * 1000
+    val awaitTimeout: Int = 10 * 60 * 1000
     val stagingRelease: Boolean = true
     val release = !isSnapshot()
     // We cannot call publish from a Command so we inline it, derived from:
