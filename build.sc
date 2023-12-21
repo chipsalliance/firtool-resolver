@@ -244,8 +244,8 @@ object `firtool-resolver` extends ScalaModule with ChipsAlliancePublishModule {
 
   def ivyDeps = Agg(
     ivy"dev.dirs:directories:26",
-    ivy"com.lihaoyi::os-lib:0.9.1",
-    ivy"com.outr::scribe:3.11.5",
-    ivy"io.get-coursier::coursier:2.1.5",
+    ivy"com.lihaoyi::os-lib:0.9.2",
+    ivy"com.outr::scribe:3.13.0",
+    ivy"io.get-coursier::coursier:2.1.8",
   )
 }
