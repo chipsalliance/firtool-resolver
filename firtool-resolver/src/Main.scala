@@ -17,7 +17,7 @@ final case class FirtoolBinary(path: File, version: String)
 /** Resolve a firtool binary
   *
   * The basic algorithm is as follows
-  *   - Check for firtool on the FIRTOOL_PATH, note any version mismatch
+  *   - Check for firtool on the CHISEL_FIRTOOL_PATH, note any version mismatch
   *   - Check for firtool in resources, note any version mismtach
   *     - If found, check if already extracted, extract if not
   *   - If none of the above found, use coursier to fetch firtool and check resources again
@@ -66,7 +66,7 @@ object Resolve {
   private val VersionRegex = """^CIRCT firtool-(\S+)$""".r
 
   private def cacheDir: String = {
-    val path = sys.env.getOrElse("FIRTOOL_CACHE", ProjectDirectories.from("", groupId, artId).cacheDir)
+    val path = sys.env.getOrElse("CHISEL_FIRTOOL_CACHE", ProjectDirectories.from("", groupId, artId).cacheDir)
     new File(path).getAbsolutePath()
   }
 
@@ -78,19 +78,19 @@ object Resolve {
     def Recoverable(msg: String): Either[String, Either[String, FirtoolBinary]] = Right(Left(msg))
     def Unrecoverable(msg: String): Either[String, Either[String, FirtoolBinary]] = Left(msg)
 
-    logger.debug("Checking FIRTOOL_PATH for firtool")
+    logger.debug("Checking CHISEL_FIRTOOL_PATH for firtool")
 
     // TODO make this function more consistent between return and matching
-    val firtoolPathOpt = sys.env.get("FIRTOOL_PATH")
+    val firtoolPathOpt = sys.env.get("CHISEL_FIRTOOL_PATH")
     if (firtoolPathOpt.isEmpty) {
-      val msg = "FIRTOOL_PATH not set"
+      val msg = "CHISEL_FIRTOOL_PATH not set"
       logger.debug(msg)
       return Recoverable(msg)
     }
 
     val firtoolPath = os.Path(firtoolPathOpt.get, os.pwd)
     if (!os.exists(firtoolPath)) {
-      val msg = s"FIRTOOL_PATH ($firtoolPath) does not exist"
+      val msg = s"CHISEL_FIRTOOL_PATH ($firtoolPath) does not exist"
       logger.debug(msg)
       return Unrecoverable(msg)
     }
@@ -219,7 +219,7 @@ object Resolve {
 
   /** Lookup firtool binary
     *
-    * @param defaultVersion fallback version to fetch if not found in FIRTOOL_PATH nor on classpath
+    * @param defaultVersion fallback version to fetch if not found in CHISEL_FIRTOOL_PATH nor on classpath
     * @param verbose print verbose logging information
     * @return Either an error message or the firtool binary
     */

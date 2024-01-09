@@ -8,8 +8,8 @@ cs launch --scala 2.13.11 \
   -v \
   $LLVM_FIRTOOL_VERSION
 )
-# CHECK: Checking FIRTOOL_PATH for firtool
-# CHECK: FIRTOOL_PATH not set
+# CHECK: Checking CHISEL_FIRTOOL_PATH for firtool
+# CHECK: CHISEL_FIRTOOL_PATH not set
 # CHECK: Checking resources for firtool
 # CHECK: firtool version not found in resources
 # CHECK: Attempting to fetch org.chipsalliance:llvm-firtool:[[LLVM_FIRTOOL_VERSION]]
