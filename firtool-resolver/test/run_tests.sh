@@ -34,4 +34,4 @@ else
   filecheck_cache=$cache
 fi
 rm -rf $cache
-FIRTOOL_CACHE=$cache $THIS_DIR/firtool_cache.sh 2>&1 | FileCheck -DLLVM_FIRTOOL_VERSION="$LLVM_FIRTOOL_VERSION" -DFIRTOOL_VERSION="$FIRTOOL_VERSION" -DFIRTOOL_CACHE="$filecheck_cache" $THIS_DIR/firtool_cache.sh
+CHISEL_FIRTOOL_CACHE=$cache $THIS_DIR/firtool_cache.sh 2>&1 | FileCheck -DLLVM_FIRTOOL_VERSION="$LLVM_FIRTOOL_VERSION" -DFIRTOOL_VERSION="$FIRTOOL_VERSION" -DCHISEL_FIRTOOL_CACHE="$filecheck_cache" $THIS_DIR/firtool_cache.sh
