@@ -4,8 +4,12 @@
 package firtoolresolver
 
 import scala.util.{Failure, Success, Try}
+import scala.collection.mutable
+import scala.io.Source
 import java.io.File
+import java.nio.file.{Paths, Files}
 import java.net.URLClassLoader
+import scala.sys.process._
 
 import dev.dirs.{BaseDirectories, ProjectDirectories, UserDirectories}
 import scribe.Logger
@@ -88,39 +92,43 @@ object Resolve {
       return Recoverable(msg)
     }
 
-    val firtoolPath = os.Path(firtoolPathOpt.get, os.pwd)
-    if (!os.exists(firtoolPath)) {
+    val firtoolPath = Paths.get(firtoolPathOpt.get).toAbsolutePath
+    if (!Files.exists(firtoolPath)) {
       val msg = s"CHISEL_FIRTOOL_PATH ($firtoolPath) does not exist"
       logger.debug(msg)
       return Unrecoverable(msg)
     }
 
-    val binary = firtoolPath / binaryName
+    val binary = firtoolPath.resolve(binaryName)
 
-    val proc = os.proc(binary, "--version")
-    logger.debug(s"Running: ${proc.commandChunks.mkString(" ")}")
+    val cmd = Seq(binary.toString, "--version")
+    logger.debug(s"Running: ${cmd.mkString(" ")}")
 
-    val result = Try(proc.call(mergeErrIntoOut=true, check=false))
+    val stdouterr = mutable.ArrayBuffer.empty[String]
+    val procLogger = ProcessLogger(stdouterr += _)
+
+    val result = Try(cmd.!(procLogger))
     result match {
-      case Failure(err) =>
-        val msg = err.getMessage
+      case Failure(e) =>
+        val msg = e.getMessage
         logger.debug(msg)
         Unrecoverable(msg)
-      case Success(result) =>
-        val version = result.out.lines().collectFirst { case VersionRegex(v) => v }
+      case Success(exitCode) =>
+        val out = stdouterr.mkString("\n")
+        val version = stdouterr.collectFirst { case VersionRegex(v) => v }
 
-        if (result.exitCode != 0) {
+        if (exitCode != 0) {
           val msg =
             s"""|Unable to run firtool binary ($binary):
-                |  Exit Code: ${result.exitCode}
-                |  Output: '${result.out.text()}
+                |  Exit Code: ${exitCode}
+                |  Output: '${out}
                 |""".stripMargin
           logger.debug(msg)
           Unrecoverable(msg)
         } else {
           // If version regex fails, that's fine
           val v = version.getOrElse("<unknown>")
-          Right(Right(FirtoolBinary(binary.toIO, v)))
+          Right(Right(FirtoolBinary(binary.toFile, v)))
         }
     }
   }
@@ -132,11 +140,12 @@ object Resolve {
       logger.debug(platform.merge)
       return Left(platform.merge) // Help out the type system
     }
-    val resources = classloader.map(os.resource(_)).getOrElse(os.resource)
-    val baseDir = resources / groupId / artId
-    val artDir = baseDir / platform.toOption.get // checked above
-    val versionFile = baseDir / "project.version"
-    val versionOpt = Try(os.read(versionFile)).toOption
+    val resourceLoader = classloader.getOrElse(this.getClass.getClassLoader)
+
+    val baseDir = s"$groupId/$artId"
+    val artDir = s"$baseDir/${platform.toOption.get}" // checked above
+    val versionFile = resourceLoader.getResource(s"$baseDir/project.version")
+    val versionOpt = Try(Source.fromURL(versionFile).mkString).toOption
     if (versionOpt.isEmpty) {
       val msg = s"firtool version not found in resources ($versionFile)"
       logger.debug(msg)
@@ -146,11 +155,11 @@ object Resolve {
     val version = versionOpt.get
     logger.debug(s"Firtool version $version found in resources")
 
-    val topDir = os.Path(cacheDir) / version
+    val topDir = Paths.get(cacheDir).resolve(version)
 
-    val destDir = topDir / "bin"
-    val destBin = destDir / "firtool"
-    val destFile: File = destBin.toIO
+    val destDir = topDir.resolve("bin")
+    val destBin = destDir.resolve("firtool")
+    val destFile: File = destBin.toFile
 
     // Check if binary already exists
     // Copying a file is not thread-safe
@@ -160,10 +169,10 @@ object Resolve {
       } else {
         // Copy
         logger.debug(s"Copying firtool from resources to $destFile")
-        val resourceBin = artDir / "bin" / "firtool"
+        val resourceBin = resourceLoader.getResourceAsStream(s"$artDir/bin/firtool")
         val result = Try {
-          os.makeDir.all(destDir)
-          os.write(destBin, os.read.stream(resourceBin))
+          Files.createDirectories(destDir)
+          Files.copy(resourceBin, destBin)
           // os-lib only supports posix permissions, use java.io to support Windows
           destFile.setWritable(true)
           destFile.setReadable(true)
