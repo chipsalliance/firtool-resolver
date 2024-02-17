@@ -284,7 +284,6 @@ object `firtool-resolver` extends ScalaModule with ChipsAlliancePublishModule { 
     // getting System property os.name
     def ivyDeps = Agg(
       ivy"dev.dirs:directories:26",
-      ivy"com.outr::scribe:3.13.0",
       ivy"io.get-coursier::coursier:2.1.8",
     )
 
@@ -294,7 +293,6 @@ object `firtool-resolver` extends ScalaModule with ChipsAlliancePublishModule { 
       // Remove Scala jars.
       // This removes scala-library, scala-collection-compat, and scala-xml.
       val regex = """.*/scala[^\/]*\.jar""".r
-      all.filter(path => regex.matches(path.toString)).foreach(println)
       all.filterNot(path => regex.matches(path.toString))
     }
 
@@ -305,11 +303,7 @@ object `firtool-resolver` extends ScalaModule with ChipsAlliancePublishModule { 
     // It would be nice if this could be derived from dependencies.
     def packagesToShade = Seq(
       "dev.dirs",
-      "scribe",
       "coursier",
-      "perfolation",
-      "sourcecode",
-      "moduload",
       "com.github.plokhotnyuk",
       "concurrentrefhashmap",
       "org.codehaus",

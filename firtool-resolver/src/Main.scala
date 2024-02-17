@@ -1,4 +1,3 @@
-
 // SPDX-License-Identifier: Apache-2.0
 
 package firtoolresolver
@@ -12,7 +11,6 @@ import java.net.URLClassLoader
 import scala.sys.process._
 
 import dev.dirs.{BaseDirectories, ProjectDirectories, UserDirectories}
-import scribe.Logger
 import coursier._
 import coursier.core.Extension
 
@@ -233,11 +231,7 @@ object Resolve {
     * @return Either an error message or the firtool binary
     */
   def apply(defaultVersion: String, verbose: Boolean = false): Either[String, FirtoolBinary] = {
-    val level = if (verbose) scribe.Level.Debug else scribe.Level.Warn
-    val logger =
-      Logger("FirtoolResolver")
-        .withHandler(formatter = scribe.format.Formatter.enhanced)
-        .withMinimumLevel(level)
+    val logger = if (verbose) Logger.debug else Logger.warn
     apply(logger, defaultVersion)
   }
 
