@@ -3,6 +3,7 @@
 import mill._
 import scalalib._
 import publish._
+import Assembly._
 import mill.util.Jvm
 import mill.scalalib.PublishModule.checkSonatypeCreds
 import mill.api.{Result}
@@ -224,7 +225,14 @@ object `llvm-firtool` extends JavaModule with ChipsAlliancePublishModule {
   }
 }
 
-object `firtool-resolver` extends ScalaModule with ChipsAlliancePublishModule {
+// firtool-resolver is a shell project (no source files) that wraps an inner core project
+// The core project is assembled (with dependencies like the scala standard lbirary removed)
+// firtool-resolver then publishes this "assembly" with dynamic dependencies
+//
+// ******************** WARNING ********************
+// This is extremely manual and changing dependencies IN ANY WAY (including bumping version)
+// requires carefully checking the packages to shade and dynamic ivy deps in the outer project
+object `firtool-resolver` extends ScalaModule with ChipsAlliancePublishModule { root =>
   def scalaVersion = "2.13.11"
 
   def publishVersion = VcsVersion.vcsState().format(countSep = "+", untaggedSuffix = "-SNAPSHOT")
@@ -242,9 +250,87 @@ object `firtool-resolver` extends ScalaModule with ChipsAlliancePublishModule {
     )
   )
 
+  // The outer project has no sources
+  def sources = T { Seq.empty[PathRef] }
+
+  def mainClass = T { Some("firtoolresolver.Main") }
+
+  // We unzip the core assembly into our unmanaged classpath so it can then be
+  // rezipped up into our jar (and published).
+  def unmanagedClasspath = T {
+    val dir = T.dest
+    os.remove.all(dir)
+    os.makeDir(dir)
+    os.proc("unzip", core.assembly().path)
+      .call(cwd = dir)
+    Agg(PathRef(dir))
+  }
+
+  // TODO These are the things stripped from upstreamAssemblyClasspath (in addition to scala-library).
+  // Is it possible to derive these automatically?
   def ivyDeps = Agg(
-    ivy"dev.dirs:directories:26",
-    ivy"com.outr::scribe:3.13.0",
-    ivy"io.get-coursier::coursier:2.1.8",
+    ivy"org.scala-lang.modules::scala-xml:2.2.0",
+    ivy"org.scala-lang.modules::scala-collection-compat:2.11.0"
   )
+
+  object core extends ScalaModule {
+
+    def scalaVersion = root.scalaVersion
+
+    // The inner project has the sources
+    def millSourcePath = root.millSourcePath
+
+    // We cannot use os-lib because it cannot be shaded without screwing up
+    // getting System property os.name
+    def ivyDeps = Agg(
+      ivy"dev.dirs:directories:26",
+      ivy"com.outr::scribe:3.13.0",
+      ivy"io.get-coursier::coursier:2.1.8",
+    )
+
+    // Modify the classpath to remove things we want to dynamically link (Scala jars).
+    override def upstreamAssemblyClasspath: T[Agg[PathRef]] = T {
+      val all = super.upstreamAssemblyClasspath()
+      // Remove Scala jars.
+      // This removes scala-library, scala-collection-compat, and scala-xml.
+      val regex = """.*/scala[^\/]*\.jar""".r
+      all.filter(path => regex.matches(path.toString)).foreach(println)
+      all.filterNot(path => regex.matches(path.toString))
+    }
+
+    // Our assembly is not intended to be an executable.
+    // Including the launcher causes unzip to fail.
+    override def prependShellScript: T[String] = T { "" }
+
+    // It would be nice if this could be derived from dependencies.
+    def packagesToShade = Seq(
+      "dev.dirs",
+      "scribe",
+      "coursier",
+      "perfolation",
+      "sourcecode",
+      "moduload",
+      "com.github.plokhotnyuk",
+      "concurrentrefhashmap",
+      "org.codehaus",
+      "scala.cli",
+      "io.github.alexarchambault",
+      "javax.inject",
+      "org.apache.commons",
+      "org.slf4j",
+      "org.iq80.snappy",
+      "org.tukaani.xz",
+      "com.github.luben.zstd",
+      "org.apache.xbean",
+      "org.fusesource.jansi",
+      "org.fusesource.hawtjni",
+    )
+
+    override def assemblyRules =
+      Seq(
+        Rule.ExcludePattern("META-INF/.*"),
+      ) ++ packagesToShade.map(p =>
+        Rule.Relocate(s"$p.**", s"firtoolresolver.shaded.$p.@1")
+      )
+  }
 }
