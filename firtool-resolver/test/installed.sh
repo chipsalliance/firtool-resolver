@@ -12,12 +12,9 @@ cs launch --scala 2.13.11 \
 # CHECK: CHISEL_FIRTOOL_PATH not set
 # CHECK: Checking resources for firtool
 # CHECK: firtool version not found in resources
-# CHECK: Firtool binary with default version ([[LLVM_FIRTOOL_VERSION]]) does not already exist
-# CHECK: Attempting to fetch org.chipsalliance:llvm-firtool:[[LLVM_FIRTOOL_VERSION]]
-# CHECK: Successfully fetched
-# CHECK: Loading
-# CHECK: to search its resources
-# CHECK: Checking resources for firtool
-# CHECK: Firtool version [[LLVM_FIRTOOL_VERSION]] found in resources
+# CHECK: Firtool binary with default version ([[LLVM_FIRTOOL_VERSION]]) {{.*}}firtool already exists
 $FIRTOOL --version
 # CHECK: CIRCT firtool-[[FIRTOOL_VERSION]]
+
+# Now delete the binary so it can be fetched again by later tests
+rm -rf $FIRTOOL
