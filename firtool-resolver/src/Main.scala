@@ -6,7 +6,7 @@ import scala.util.{Failure, Success, Try}
 import scala.collection.mutable
 import scala.io.Source
 import java.io.File
-import java.nio.file.{Paths, Files}
+import java.nio.file.{Path, Paths, Files}
 import java.net.URLClassLoader
 import scala.sys.process._
 
@@ -70,6 +70,13 @@ object Resolve {
   private def cacheDir: String = {
     val path = sys.env.getOrElse("CHISEL_FIRTOOL_CACHE", ProjectDirectories.from("", groupId, artId).cacheDir)
     new File(path).getAbsolutePath()
+  }
+
+  private def firtoolBin(version: String): Path = {
+    val topDir = Paths.get(cacheDir).resolve(version)
+
+    val destDir = topDir.resolve("bin")
+    destDir.resolve("firtool")
   }
 
   // Nested Either is weird but represents unrecoverable vs. recoverable errors
@@ -153,10 +160,7 @@ object Resolve {
     val version = versionOpt.get
     logger.debug(s"Firtool version $version found in resources")
 
-    val topDir = Paths.get(cacheDir).resolve(version)
-
-    val destDir = topDir.resolve("bin")
-    val destBin = destDir.resolve("firtool")
+    val destBin = firtoolBin(version)
     val destFile: File = destBin.toFile
 
     // Check if binary already exists
@@ -169,7 +173,7 @@ object Resolve {
         logger.debug(s"Copying firtool from resources to $destFile")
         val resourceBin = resourceLoader.getResourceAsStream(s"$artDir/bin/firtool")
         val result = Try {
-          Files.createDirectories(destDir)
+          Files.createDirectories(destBin.getParent)
           Files.copy(resourceBin, destBin)
           // os-lib only supports posix permissions, use java.io to support Windows
           destFile.setWritable(true)
@@ -184,6 +188,18 @@ object Resolve {
       }
     }
     Right(FirtoolBinary(destFile, version))
+  }
+
+  private def checkInstalled(logger: Logger, defaultVersion: String): Either[String, FirtoolBinary] = {
+    val destFile: File = firtoolBin(defaultVersion).toFile
+    if (destFile.isFile) {
+      logger.debug(s"Firtool binary with default version ($defaultVersion) $destFile already exists")
+      Right(FirtoolBinary(destFile, defaultVersion))
+    } else {
+      val msg = s"Firtool binary with default version ($defaultVersion) does not already exist"
+      logger.debug(msg)
+      Left(msg)
+    }
   }
 
   private def fetchArtifact(logger: Logger, defaultVersion: String): Either[String, FirtoolBinary] = {
@@ -244,9 +260,10 @@ object Resolve {
       // returned in Left
       msg1 <- res.left
       msg2 <- checkResources(None, logger).left
-      msg3 <- fetchArtifact(logger, defaultVersion).left
+      msg3 <- checkInstalled(logger, defaultVersion).left
+      msg4 <- fetchArtifact(logger, defaultVersion).left
     } yield {
-      s"Failed to fetch firtool:\n$msg1\n$msg2\n$msg3"
+      List("Failed to fetch firtool:", msg1, msg2, msg3, msg4).mkString("\n")
     }
   }
 }
