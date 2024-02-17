@@ -10,6 +10,9 @@ import mill.api.{Result}
 import $ivy.`de.tototec::de.tobiasroeser.mill.vcs.version::0.4.0`
 import de.tobiasroeser.mill.vcs.version.VcsVersion
 
+import $ivy.`com.lihaoyi::mill-contrib-proguard:`
+import contrib.proguard._
+
 case class Platform(os: String, arch: String) {
   override def toString: String = s"$os-$arch"
 }
@@ -261,7 +264,7 @@ object `firtool-resolver` extends ScalaModule with ChipsAlliancePublishModule { 
     val dir = T.dest
     os.remove.all(dir)
     os.makeDir(dir)
-    os.proc("unzip", core.assembly().path)
+    os.proc("unzip", core.proguard().path)
       .call(cwd = dir)
     Agg(PathRef(dir))
   }
@@ -273,7 +276,7 @@ object `firtool-resolver` extends ScalaModule with ChipsAlliancePublishModule { 
     ivy"org.scala-lang.modules::scala-collection-compat:2.11.0"
   )
 
-  object core extends ScalaModule {
+  object core extends ScalaModule with Proguard {
 
     def scalaVersion = root.scalaVersion
 
@@ -326,5 +329,20 @@ object `firtool-resolver` extends ScalaModule with ChipsAlliancePublishModule { 
       ) ++ packagesToShade.map(p =>
         Rule.Relocate(s"$p.**", s"firtoolresolver.shaded.$p.@1")
       )
+
+    // Proguard options for optimizing "statically" linked dependencies
+    override def proguardVersion = T("7.4.1")
+
+    override def obfuscate: T[Boolean] = T { false }
+
+    override def additionalOptions = T {
+      Seq(
+        "-dontwarn scala.**",
+        "-dontwarn javax.annotation.**",
+        "-dontwarn firtoolresolver.shaded.**",
+        "-dontwarn firtoolresolver.FirtoolBinary",
+        "-keep class firtoolresolver.* { *; }",
+      )
+    }
   }
 }
