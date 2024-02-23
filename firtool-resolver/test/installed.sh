@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 FIRTOOL=$(
-cs launch --scala 2.13.11 \
+cs launch --scala $SCALA_VERSION \
   org.chipsalliance::firtool-resolver:$FIRTOOL_RESOLVER_VERSION \
   --main firtoolresolver.Main \
   -- \

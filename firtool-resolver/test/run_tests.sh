@@ -5,10 +5,11 @@ set -ex
 THIS_DIR=$(cd "$(dirname "$0")"; pwd -P)
 
 OS=$1
+export SCALA_VERSION=$2
 
 export COURSIER_CACHE="$PWD/coursier_cache"
 rm -rf $COURSIER_CACHE
-export FIRTOOL_RESOLVER_VERSION=$(./mill show firtool-resolver.publishVersion | xargs)
+export FIRTOOL_RESOLVER_VERSION=$(./mill show firtool-resolver[$SCALA_VERSION].publishVersion | xargs)
 export LLVM_FIRTOOL_VERSION=$(./mill show llvm-firtool.publishVersion | xargs)
 # If there's a -SNAPSHOT in LLVM_FIRTOOL_VERSION, strip it
 export FIRTOOL_VERSION=${LLVM_FIRTOOL_VERSION%-SNAPSHOT}
@@ -18,7 +19,7 @@ $THIS_DIR/negative.sh 2>&1 | FileCheck $THIS_DIR/negative.sh
 # TODO remove this line, use maven central published versions
 ./mill llvm-firtool.publishLocal
 
-./mill firtool-resolver.publishLocal
+./mill firtool-resolver[$SCALA_VERSION].publishLocal
 
 $THIS_DIR/on_classpath.sh 2>&1 | FileCheck -DLLVM_FIRTOOL_VERSION="$LLVM_FIRTOOL_VERSION" -DFIRTOOL_VERSION="$FIRTOOL_VERSION" $THIS_DIR/on_classpath.sh
 
