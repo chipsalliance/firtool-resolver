@@ -240,6 +240,8 @@ trait FirtoolResolver extends CrossScalaModule with ChipsAlliancePublishModule {
     "2.12" -> "2.12.18"
   )(crossValue)
 
+  def scalacOptions = Seq("-deprecation", "-feature", "-release:8")
+
   def publishVersion = VcsVersion.vcsState().format(countSep = "+", untaggedSuffix = "-SNAPSHOT")
 
   def isSnapshot = T { publishVersion().endsWith("-SNAPSHOT") }
@@ -281,6 +283,8 @@ trait FirtoolResolver extends CrossScalaModule with ChipsAlliancePublishModule {
   object core extends ScalaModule {
 
     def scalaVersion = root.scalaVersion
+
+    def scalacOptions = root.scalacOptions
 
     // The inner project has the sources
     def millSourcePath = root.millSourcePath
