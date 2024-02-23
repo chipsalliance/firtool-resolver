@@ -18,6 +18,7 @@ jobs:
     name: Run Tests
     strategy:
       matrix:
+        scala-version: ["2.13", "2.12"]
         runner: ["ubuntu-20.04", "macos-11", "windows-2019"]
         include:
           - runner: ubuntu-20.04
@@ -70,5 +71,5 @@ jobs:
         run: |
           # First run of mill is important to set itself up
           ./mill resolve _
-          ./firtool-resolver/test/run_tests.sh ${{ matrix.os }}
+          ./firtool-resolver/test/run_tests.sh ${{ matrix.os }} ${{ matrix.scala-version }}
 
