@@ -236,7 +236,7 @@ object Resolve {
 
 
     logger.debug(s"Loading $jar to search its resources")
-    val classloader = new URLClassLoader(Array(jar.toURL))
+    val classloader = new URLClassLoader(Array(jar.toURI.toURL))
     checkResources(Some(classloader), logger)
   }
 
