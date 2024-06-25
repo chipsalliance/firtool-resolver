@@ -1,7 +1,7 @@
 //> using scala "2.13"
-//> using lib "com.47deg::github4s:0.32.1"
-//> using lib "io.get-coursier::coursier:2.1.8"
-//> using lib "com.lihaoyi::upickle:3.1.3"
+//> using dep "com.47deg::github4s:0.32.1"
+//> using dep "io.get-coursier::coursier:2.1.10"
+//> using dep "com.lihaoyi::upickle:3.3.1"
 //> using options "-unchecked", "-deprecation", "-feature", "-Xcheckinit", "-Xfatal-warnings", "-Ywarn-dead-code", "-Ywarn-unused"
 
 import cats.effect.IO
@@ -63,6 +63,12 @@ object Releases {
   val cutoffForNew: LocalDateTime =
     LocalDateTime.now(java.time.ZoneOffset.UTC).minusDays(2)
 
+  def isFirtoolRelease(release: Release): Boolean = {
+    val isFirtool = release.tag_name.startsWith("firtool")
+    System.err.println(s"Is ${release.tag_name} a firtool release? $isFirtool")
+    isFirtool
+  }
+
   /** New releases are those published in the last 48 hours */
   def isNewRelease(release: Release): Boolean = {
     val isNew = release.published_at.map { time =>
@@ -97,9 +103,10 @@ object Releases {
 
 object Main extends App {
 
-  val r = Releases.releases
+  val allCirctReleases = Releases.releases
+  val firtoolReleases = allCirctReleases.filter(Releases.isFirtoolRelease)
   // Github returns new releases in order so we can takeWhile
-  val newReleases = r.takeWhile(Releases.isNewRelease)
+  val newReleases = firtoolReleases.takeWhile(Releases.isNewRelease)
   val unpublished = newReleases.filter(!Releases.isAlreadyPublished(_))
   val result = unpublished.map(Releases.getVersion).toList
   System.err.println("We need to publish version(s): " + result.mkString(", "))
