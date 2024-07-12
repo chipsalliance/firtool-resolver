@@ -19,13 +19,13 @@ jobs:
     strategy:
       matrix:
         scala-version: ["2.13", "2.12"]
-        runner: ["ubuntu-20.04", "macos-11", "windows-2019"]
+        runner: ["ubuntu-20.04", "macos-12", "windows-2019"]
         include:
           - runner: ubuntu-20.04
             os: linux
             arch: x64
             ext: ""
-          - runner: macos-11
+          - runner: macos-12
             os: macos
             arch: x64
             ext: ""
@@ -36,7 +36,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Install wget (Windows)
         if: matrix.os == 'windows'
         run: choco install wget
