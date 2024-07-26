@@ -2,9 +2,9 @@ name: Continuous Delivery of llvm-firtool
 
 on:
   workflow_dispatch:
-  # Run every 8 hours to balance compute with picking up new releases of llvm/circt
+  # Run every 15 min, checking for new releases is cheap.
   schedule:
-    - cron: '0 */8 * * *'
+    - cron: '*/15 * * * *'
 
 
 jobs:
@@ -13,11 +13,16 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+      - name: Setup Java
+        run: echo "JAVA_HOME=${JAVA_HOME_17_X64}" >> "$GITHUB_ENV"
       - uses: coursier/cache-action@v6
       - uses: VirtusLab/scala-cli-setup@v1
+        with:
+          jvm: '' # Deliberately empty to avoid downloading JVM.
       - id: detect-versions
         run: |
-          versions=$(scala-cli .github/scripts/FindNewReleases.scala)
+          # --server=false avoids an hang.
+          versions=$(scala-cli --server=false .github/scripts/FindNewReleases.scala)
           echo "versions=$versions" >> $GITHUB_OUTPUT
     outputs:
       versions: ${{ steps.detect-versions.outputs.versions }}
