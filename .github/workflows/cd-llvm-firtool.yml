@@ -24,6 +24,8 @@ jobs:
           # --server=false avoids an hang.
           versions=$(scala-cli --server=false .github/scripts/FindNewReleases.scala)
           echo "versions=$versions" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     outputs:
       versions: ${{ steps.detect-versions.outputs.versions }}
 
