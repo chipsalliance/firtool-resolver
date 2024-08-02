@@ -123,15 +123,33 @@ object `llvm-firtool` extends JavaModule with ChipsAlliancePublishModule {
 
   private def getBaseDir(dir: os.Path): os.Path = dir / groupId / artId
 
-  // Downloaded tarball for each platform
-  def tarballs = T {
+  def tarballUrls =
     platforms.map { platform =>
       val tarballName = if (platform.os == "windows") {
         s"firrtl-bin-$platform.zip"
       } else {
         s"firrtl-bin-$platform.tar.gz"
       }
-      val archiveUrl = s"$releaseUrl/$tarballName"
+      platform -> s"$releaseUrl/$tarballName"
+    }
+
+  // Check if the artifacts are available
+  // There is a long latency between the Github release being published and
+  // the artifacts being available. This command allows automation to
+  // gracefully wait for the artifacts to be uploaded.
+  def checkForArtifacts() = T.command {
+    val allExist = tarballUrls.forall { case (_, url) =>
+      val r = requests.head(url, check = false)
+      r.statusCode == 200
+    }
+    println(allExist)
+    allExist
+  }
+
+  // Downloaded tarball for each platform
+  def tarballs = T {
+    tarballUrls.map { case (platform, archiveUrl) =>
+      val tarballName = archiveUrl.split('/').last
       val file = T.dest / tarballName
       os.write(file, requests.get.stream(archiveUrl))
       platform -> PathRef(file)
