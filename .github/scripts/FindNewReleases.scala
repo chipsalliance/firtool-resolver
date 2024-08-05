@@ -61,7 +61,7 @@ object Releases {
 
   /** Time cutoff for what counts as a "new" release */
   val cutoffForNew: LocalDateTime =
-    LocalDateTime.now(java.time.ZoneOffset.UTC).minusDays(2)
+    LocalDateTime.now(java.time.ZoneOffset.UTC).minusDays(7)
 
   def isFirtoolRelease(release: Release): Boolean = {
     val isFirtool = release.tag_name.startsWith("firtool")
