@@ -13,16 +13,25 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Java
-        run: echo "JAVA_HOME=${JAVA_HOME_17_X64}" >> "$GITHUB_ENV"
-      - uses: coursier/cache-action@v6
-      - uses: VirtusLab/scala-cli-setup@v1
+      - name: Cache FindNewReleases
+        uses: actions/cache@v3
+        id: docache
         with:
-          jvm: '' # Deliberately empty to avoid downloading JVM.
+          path: FindNewReleases
+          key: ${{ runner.os }}-FindNewReleases-${{ hashFiles('.github/scripts/FindNewReleases.scala') }}
+      # Dont bother caching Scala build, we rarely need to rebuild FindNewReleases
+      - name: Setup Scala
+        uses: VirtusLab/scala-cli-setup@v1
+        if: steps.docache.outputs.cache-hit != 'true'
+        with:
+          jvm: 'graalvm-community:21.0.2'
+      - name: Compile FindNewReleases
+        if: steps.docache.outputs.cache-hit != 'true'
+        run: |
+          scala-cli --power package --graal --graalvm-java-version 21 --graalvm-version 21.0.2 --force -o FindNewReleases .github/scripts/FindNewReleases.scala
       - id: detect-versions
         run: |
-          # --server=false avoids an hang.
-          versions=$(scala-cli --server=false .github/scripts/FindNewReleases.scala)
+          versions=$(./FindNewReleases)
           echo "versions=$versions" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

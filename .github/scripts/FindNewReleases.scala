@@ -3,6 +3,7 @@
 //> using dep "io.get-coursier::coursier:2.1.10"
 //> using dep "com.lihaoyi::upickle:3.3.1"
 //> using options "-unchecked", "-deprecation", "-feature", "-Xcheckinit", "-Xfatal-warnings", "-Ywarn-dead-code", "-Ywarn-unused"
+//> using packaging.graalvmArgs "--enable-url-protocols=https"
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
