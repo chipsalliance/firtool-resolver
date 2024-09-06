@@ -1,7 +1,8 @@
 //> using scala "2.13"
 //> using dep "com.47deg::github4s:0.32.1"
 //> using dep "io.get-coursier::coursier:2.1.10"
-//> using dep "com.lihaoyi::upickle:3.3.1"
+//> using dep "com.lihaoyi::upickle:4.0.1"
+//> using dep "com.lihaoyi::requests:0.9.0"
 //> using options "-unchecked", "-deprecation", "-feature", "-Xcheckinit", "-Xfatal-warnings", "-Ywarn-dead-code", "-Ywarn-unused"
 //> using packaging.graalvmArgs "--enable-url-protocols=https"
 
@@ -20,6 +21,11 @@ import java.time.format.DateTimeFormatter._
 object Releases {
 
   // These are hardcoded but could be turned into parameters
+
+  // NOTE: These files must be kept in sync with the artifacts downloaded in build.sc
+  val expectedAritfacts = Seq(
+    "firrtl-bin-linux-x64.tar.gz", "firrtl-bin-macos-x64.tar.gz", "firrtl-bin-windows-x64.zip"
+  )
 
   val httpClient: Client[IO] = JavaNetClientBuilder[IO].create
   val token: Option[String] = sys.env.get("GITHUB_TOKEN")
@@ -100,6 +106,25 @@ object Releases {
     System.err.println(s"Has $version already been published? $exists")
     exists
   }
+
+  /** Check if the artifacts needed to publish llvm-firtool have been uploaded */
+  def necessaryArtifactsExist(release: Release): Boolean = {
+    // Annoyingly, Github4s does not return information about artifacts in the Release object
+    // So we need to do another request
+    val headers = token.map(t => Seq("authorization" -> s"Bearer ${t}")).getOrElse(Seq.empty)
+    val response = requests.get(release.assets_url, headers = headers)
+
+    val releaseArtifacts = ujson.read(response.data.array).arr
+    val releaseArtifactNames = releaseArtifacts.map(_.obj("name").str).toSet
+
+    System.err.println(s"For ${release.tag_name}:")
+    val missingArtifacts = expectedAritfacts.filterNot { art =>
+      val found = releaseArtifactNames.contains(art)
+      System.err.println(s"  $art found? $found")
+      found
+    }
+    missingArtifacts.isEmpty
+  }
 }
 
 object Main extends App {
@@ -109,7 +134,8 @@ object Main extends App {
   // Github returns new releases in order so we can takeWhile
   val newReleases = firtoolReleases.takeWhile(Releases.isNewRelease)
   val unpublished = newReleases.filter(!Releases.isAlreadyPublished(_))
-  val result = unpublished.map(Releases.getVersion).toList
+  val ready = unpublished.filter(Releases.necessaryArtifactsExist)
+  val result = ready.map(Releases.getVersion).toList
   System.err.println("We need to publish version(s): " + result.mkString(", "))
 
   val jsonList = write(result)

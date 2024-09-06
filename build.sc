@@ -124,6 +124,7 @@ object `llvm-firtool` extends JavaModule with ChipsAlliancePublishModule {
   private def getBaseDir(dir: os.Path): os.Path = dir / groupId / artId
 
   // Downloaded tarball for each platform
+  // Note that these tarballs must be kept in sync with .github/scripts/FindNewReleases.scala
   def tarballs = T {
     platforms.map { platform =>
       val tarballName = if (platform.os == "windows") {
