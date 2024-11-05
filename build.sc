@@ -233,12 +233,13 @@ object `llvm-firtool` extends JavaModule with ChipsAlliancePublishModule {
 // ******************** WARNING ********************
 // This is extremely manual and changing dependencies IN ANY WAY (including bumping version)
 // requires carefully checking the packages to shade and dynamic ivy deps in the outer project
-object `firtool-resolver` extends Cross[FirtoolResolver]("2.13", "2.12")
-trait FirtoolResolver extends CrossScalaModule with ChipsAlliancePublishModule { root =>
+object `firtool-resolver` extends Cross[FirtoolResolver]("2.13", "2.12", "3.4")
+trait FirtoolResolver extends CrossSbtModule with ChipsAlliancePublishModule { root =>
 
   override def crossScalaVersion = Map(
     "2.13" -> "2.13.11",
-    "2.12" -> "2.12.18"
+    "2.12" -> "2.12.18",
+    "3.4" -> "3.4.2"
   )(crossValue)
 
   def scalacOptions = Seq("-deprecation", "-feature", "-release:8")
@@ -281,9 +282,10 @@ trait FirtoolResolver extends CrossScalaModule with ChipsAlliancePublishModule {
     ivy"org.scala-lang.modules::scala-collection-compat:2.11.0"
   )
 
-  object core extends ScalaModule {
-
+  object core extends CrossSbtModule with CrossValue {
     def scalaVersion = root.scalaVersion
+
+    // override def crossValue = this.crossScalaVersion
 
     def scalacOptions = root.scalacOptions
 
@@ -292,10 +294,14 @@ trait FirtoolResolver extends CrossScalaModule with ChipsAlliancePublishModule {
 
     // We cannot use os-lib because it cannot be shaded without screwing up
     // getting System property os.name
-    def ivyDeps = Agg(
-      ivy"dev.dirs:directories:26",
-      ivy"io.get-coursier::coursier:2.1.8",
-    )
+    def ivyDeps = if (this.crossScalaVersion.startsWith("3")) {
+      Agg(ivy"dev.dirs:directories:26")
+    } else {
+      Agg(
+        ivy"dev.dirs:directories:26",
+        ivy"io.get-coursier::coursier:2.1.8",
+      )
+    }
 
     // Modify the classpath to remove things we want to dynamically link (Scala jars).
     override def upstreamAssemblyClasspath: T[Agg[PathRef]] = T {
