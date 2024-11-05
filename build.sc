@@ -286,8 +286,6 @@ trait FirtoolResolver extends CrossSbtModule with ChipsAlliancePublishModule { r
   object core extends CrossSbtModule with CrossValue {
     def scalaVersion = root.scalaVersion
 
-    // override def crossValue = this.crossScalaVersion
-
     def scalacOptions = root.scalacOptions
 
     // The inner project has the sources
