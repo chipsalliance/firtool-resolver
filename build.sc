@@ -233,13 +233,14 @@ object `llvm-firtool` extends JavaModule with ChipsAlliancePublishModule {
 // ******************** WARNING ********************
 // This is extremely manual and changing dependencies IN ANY WAY (including bumping version)
 // requires carefully checking the packages to shade and dynamic ivy deps in the outer project
-object `firtool-resolver` extends Cross[FirtoolResolver]("2.13", "2.12", "3.4")
+object `firtool-resolver` extends Cross[FirtoolResolver]("2.13", "2.12", "3.4", "3.3")
 trait FirtoolResolver extends CrossSbtModule with ChipsAlliancePublishModule { root =>
 
   override def crossScalaVersion = Map(
     "2.13" -> "2.13.11",
     "2.12" -> "2.12.18",
-    "3.4" -> "3.4.2"
+    "3.4" -> "3.4.2",
+    "3.3" -> "3.3.3"
   )(crossValue)
 
   def scalacOptions = Seq("-deprecation", "-feature", "-release:8")
