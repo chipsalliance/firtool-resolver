@@ -6,7 +6,7 @@ import scala.util.{Failure, Success, Try}
 import scala.collection.mutable
 import scala.io.Source
 import java.io.File
-import java.nio.file.{Path, Paths, Files}
+import java.nio.file.{Path, Paths, Files, StandardCopyOption}
 import java.net.URLClassLoader
 import scala.sys.process._
 
@@ -164,27 +164,31 @@ object Resolve {
     val destFile: File = destBin.toFile
 
     // Check if binary already exists
-    // Copying a file is not thread-safe
-    this.synchronized {
-      if (destFile.isFile()) {
-        logger.debug(s"Firtool binary $destFile already exists")
-      } else {
-        // Copy
-        logger.debug(s"Copying firtool from resources to $destFile")
-        val resourceBin = resourceLoader.getResourceAsStream(s"$artDir/bin/firtool")
-        val result = Try {
-          Files.createDirectories(destBin.getParent)
-          Files.copy(resourceBin, destBin)
-          // os-lib only supports posix permissions, use java.io to support Windows
-          destFile.setWritable(true)
-          destFile.setReadable(true)
-          destFile.setExecutable(true)
-        }
-        if (result.isFailure) {
-          val msg = s"Copying firtool failed with ${result.failed.get}"
-          logger.debug(msg)
-          return Left(msg)
-        }
+    if (destFile.isFile()) {
+      logger.debug(s"Firtool binary $destFile already exists")
+    } else this.synchronized {
+      // Copy
+      // This can be executed by many threads or processes at a time so use atomic move
+      logger.debug(s"Copying firtool from resources to $destFile")
+      val resourceBin = resourceLoader.getResourceAsStream(s"$artDir/bin/firtool")
+      val result = Try {
+        val dir = destBin.getParent
+        Files.createDirectories(dir)
+        // Use temporary file for multi-thread or multi-process safety
+        val tmp = Files.createTempFile(dir, destBin.getFileName.toString, ".tmp")
+        logger.debug(s"Created temporary file $tmp")
+        Files.copy(resourceBin, tmp, StandardCopyOption.REPLACE_EXISTING)
+        // Use java.io.File APIs to support Windows
+        tmp.toFile.setWritable(true)
+        tmp.toFile.setReadable(true)
+        tmp.toFile.setExecutable(true)
+        logger.debug(s"Atomically moving $tmp to $destBin")
+        Files.move(tmp, destBin, StandardCopyOption.ATOMIC_MOVE)
+      }
+      if (result.isFailure) {
+        val msg = s"Copying firtool failed with ${result.failed.get}"
+        logger.debug(msg)
+        return Left(msg)
       }
     }
     Right(FirtoolBinary(destFile, version))
