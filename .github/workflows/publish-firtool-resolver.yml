@@ -7,7 +7,7 @@ jobs:
   # This assumes you've already run the tests
   publish:
     name: Publish Firtool Resolver
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout

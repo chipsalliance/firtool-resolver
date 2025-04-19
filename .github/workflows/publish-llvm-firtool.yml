@@ -36,7 +36,7 @@ jobs:
 
   publish:
     name: Publish LLVM Firtool
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     needs: test
 
     steps:

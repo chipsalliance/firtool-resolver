@@ -19,9 +19,9 @@ jobs:
     strategy:
       matrix:
         scala-version: ["2.13", "2.12"]
-        runner: ["ubuntu-20.04", "macos-13", "windows-2019"]
+        runner: ["ubuntu-24.04", "macos-13", "windows-2019"]
         include:
-          - runner: ubuntu-20.04
+          - runner: ubuntu-24.04
             os: linux
             arch: x64
             ext: ""
