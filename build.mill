@@ -194,7 +194,7 @@ object `llvm-firtool` extends JavaModule with ChipsAlliancePublishModule {
       Jvm.createJar(
         jarPath,
         Agg(dir.path, fnddsMetadata().path),
-        mill.api.JarManifest.MillDefault,
+        mill.util.JarManifest.MillDefault,
         (_, _) => true
       )
       platform -> PathRef(jarPath)
@@ -288,7 +288,7 @@ trait FirtoolResolver extends CrossScalaModule with ChipsAlliancePublishModule {
     def scalacOptions = root.scalacOptions
 
     // The inner project has the sources
-    def millSourcePath = root.millSourcePath
+    def millSourcePath = root.moduleDir
 
     // We cannot use os-lib because it cannot be shaded without screwing up
     // getting System property os.name
