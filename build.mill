@@ -42,13 +42,13 @@ trait ChipsAlliancePublishModule extends SonatypeCentralPublishModule {
   // Mill uses the MIT license
   private def loadSonatypeCreds(): Task[SonatypeCredentials] = T.task {
     (for {
-      username <- T.env.get("SONATYPE_USERNAME")
-      password <- T.env.get("SONATYPE_PASSWORD")
+      username <- T.env.get("MAVEN_CENTRAL_USERNAME")
+      password <- T.env.get("MAVEN_CENTRAL_PASSWORD")
     } yield {
       Result.Success(SonatypeCredentials(username, password))
     }).getOrElse(
       Result.Failure(
-        "Consider using SONATYPE_USERNAME/SONATYPE_PASSWORD environment variables or passing `sonatypeCreds` argument"
+        "You must set MAVEN_CENTRAL_USERNAME and MAVEN_CENTRAL_PASSWORD environment variables"
       )
     )
   }
