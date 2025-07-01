@@ -9,6 +9,7 @@ import mill.scalalib.PublishModule.checkSonatypeCreds
 import mill.api.{Result}
 import $ivy.`de.tototec::de.tobiasroeser.mill.vcs.version::0.4.0`
 import de.tobiasroeser.mill.vcs.version.VcsVersion
+import com.lumidion.sonatype.central.client.core.{PublishingType, SonatypeCredentials}
 
 case class Platform(os: String, arch: String) {
   override def toString: String = s"$os-$arch"
@@ -19,12 +20,10 @@ object Platform {
   implicit val rw: ReadWriter[Platform] = macroRW
 }
 
-trait ChipsAlliancePublishModule extends PublishModule {
+trait ChipsAlliancePublishModule extends SonatypeCentralPublishModule {
 
   def isSnapshot: T[Boolean]
 
-  override def sonatypeUri: String = "https://s01.oss.sonatype.org/service/local"
-  override def sonatypeSnapshotUri: String = "https://s01.oss.sonatype.org/content/repositories/snapshots"
   protected def getEnvVariable(name: String): String =
     sys.env.get(name).getOrElse(throw new Exception(s"Environment variable $name must be defined!"))
 
@@ -41,12 +40,12 @@ trait ChipsAlliancePublishModule extends PublishModule {
   // We cannot call publish from a Command so we inline it, derived from:
   // https://github.com/com-lihaoyi/mill/blob/e4bcc274cff76534d9b7bdfe6238bd65fc1eaf45/scalalib/src/mill/scalalib/PublishModule.scala#L279
   // Mill uses the MIT license
-  private def loadSonatypeCreds(): Task[String] = T.task {
+  private def loadSonatypeCreds(): Task[SonatypeCredentials] = T.task {
     (for {
       username <- T.env.get("SONATYPE_USERNAME")
       password <- T.env.get("SONATYPE_PASSWORD")
     } yield {
-      Result.Success(s"$username:$password")
+      Result.Success(SonatypeCredentials(username, password))
     }).getOrElse(
       Result.Failure(
         "Consider using SONATYPE_USERNAME/SONATYPE_PASSWORD environment variables or passing `sonatypeCreds` argument"
@@ -56,30 +55,25 @@ trait ChipsAlliancePublishModule extends PublishModule {
 
   // Helper for publishing, sets values so we don't have to set them on the command-line
   def publishSigned() = T.command {
-    val signed = true
     val readTimeout: Int = 2 * 60 * 1000
     val connectTimeout: Int = 10 * 1000
     val awaitTimeout: Int = 10 * 60 * 1000
     val stagingRelease: Boolean = true
-    val release = !isSnapshot()
+    val publishingType = PublishingType.AUTOMATIC
     // We cannot call publish from a Command so we inline it, derived from:
     // https://github.com/com-lihaoyi/mill/blob/e4bcc274cff76534d9b7bdfe6238bd65fc1eaf45/scalalib/src/mill/scalalib/PublishModule.scala#L177
     // Mill uses the MIT license
     val PublishModule.PublishData(artifactInfo, artifacts) = publishArtifacts()
-    new SonatypePublisher(
-      sonatypeUri,
-      sonatypeSnapshotUri,
+    new SonatypeCentralPublisher(
       loadSonatypeCreds()(),
-      signed,
       gpgArgs,
       readTimeout,
       connectTimeout,
       T.log,
       T.workspace,
       T.env,
-      awaitTimeout,
-      stagingRelease
-    ).publish(artifacts.map { case (a, b) => (a.path, b) }, artifactInfo, release)
+      awaitTimeout
+    ).publish(artifacts.map { case (a, b) => (a.path, b) }, artifactInfo, publishingType)
   }
 }
 
