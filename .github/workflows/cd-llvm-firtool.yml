@@ -41,9 +41,7 @@ jobs:
   publish:
     name: Publish LLVM Firtool
     needs: detect
-    # Temporarily disable while we upgrade to new publishing flow
-    #if: ${{ needs.detect.outputs.versions != '[]' }}
-    if: false
+    if: ${{ needs.detect.outputs.versions != '[]' }}
     strategy:
       matrix:
         version: ${{ fromJSON(needs.detect.outputs.versions) }}
