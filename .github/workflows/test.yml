@@ -27,7 +27,7 @@ jobs:
             ext: ""
           - runner: macos-15
             os: macos
-            arch: arm64
+            arch: x64 # Technically it's x64 but we rely on Rosetta for the time being.
             ext: ""
           - runner: windows-2025
             os: windows
