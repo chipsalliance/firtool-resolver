@@ -19,24 +19,24 @@ jobs:
     strategy:
       matrix:
         scala-version: ["2.13", "2.12"]
-        runner: ["ubuntu-24.04", "macos-13", "windows-2022"]
+        runner: ["ubuntu-24.04", "macos-15", "windows-2025"]
         include:
           - runner: ubuntu-24.04
             os: linux
             arch: x64
             ext: ""
-          - runner: macos-13
+          - runner: macos-15
             os: macos
-            arch: x64
+            arch: arm64
             ext: ""
-          - runner: windows-2022
+          - runner: windows-2025
             os: windows
             arch: x64
             ext: ".exe"
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Install wget (Windows)
         if: matrix.os == 'windows'
         run: choco install wget
@@ -53,7 +53,7 @@ jobs:
           ./FileCheck --version
           cd ..
       - name: Install Scala and Coursier
-        uses: coursier/setup-action@v1
+        uses: coursier/setup-action@v2
         with:
           jvm: adopt:11
       - name: Set versions
