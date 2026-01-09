@@ -11,16 +11,16 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Install Scala and Coursier
-        uses: coursier/setup-action@v1
+        uses: coursier/setup-action@v2
         with:
-          jvm: adopt:11
+          jvm: temurin:17
       - name: Import GPG key
-        # This is crazy-max/ghaction-import-gpg@v6, using commit for security reasons
-        uses: crazy-max/ghaction-import-gpg@82a020f1f7f605c65dd2449b392a52c3fcfef7ef
+        # This is crazy-max/ghaction-import-gpg@v6.3.0, using commit for security reasons
+        uses: crazy-max/ghaction-import-gpg@e89d40939c28e39f97cf32126055eeae86ba74ec
         with:
           gpg_private_key: ${{ secrets.PGP_SECRET }}
           passphrase: ${{ secrets.PGP_PASSPHRASE }}
