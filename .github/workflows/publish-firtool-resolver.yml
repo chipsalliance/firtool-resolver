@@ -17,7 +17,7 @@ jobs:
       - name: Install Scala and Coursier
         uses: coursier/setup-action@v2
         with:
-          jvm: adopt:11
+          jvm: temurin:17
       - name: Import GPG key
         # This is crazy-max/ghaction-import-gpg@v6.3.0, using commit for security reasons
         uses: crazy-max/ghaction-import-gpg@e89d40939c28e39f97cf32126055eeae86ba74ec

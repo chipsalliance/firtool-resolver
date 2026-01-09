@@ -45,7 +45,7 @@ jobs:
       - name: Install Scala and Coursier
         uses: coursier/setup-action@v2
         with:
-          jvm: adopt:11
+          jvm: temurin:17
       - name: Check if already published
         if: ${{ ! inputs.snapshot }}
         # TODO skip if snapshot
