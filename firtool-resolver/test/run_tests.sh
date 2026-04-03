@@ -11,8 +11,6 @@ export COURSIER_CACHE="$PWD/coursier_cache"
 rm -rf $COURSIER_CACHE
 export FIRTOOL_RESOLVER_VERSION=$(./mill show firtool-resolver[$SCALA_VERSION].publishVersion | xargs)
 export LLVM_FIRTOOL_VERSION=$(./mill show llvm-firtool.publishVersion | xargs)
-# If there's a -SNAPSHOT in LLVM_FIRTOOL_VERSION, strip it
-export FIRTOOL_VERSION=${LLVM_FIRTOOL_VERSION%-SNAPSHOT}
 
 $THIS_DIR/negative.sh 2>&1 | FileCheck $THIS_DIR/negative.sh
 

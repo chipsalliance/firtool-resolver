@@ -65,7 +65,7 @@ jobs:
             IS_PRERELEASE=0
           fi
           echo "LLVM_FIRTOOL_PRERELEASE=$IS_PRERELEASE" >> "$GITHUB_ENV"
-          echo "LLVM_FIRTOOL_VERSION=${{ inputs.version }}" >> "$GITHUB_ENV"
+          echo "FIRTOOL_VERSION=${{ inputs.version }}" >> "$GITHUB_ENV"
       - name: Run Test
         shell: bash
         run: |
