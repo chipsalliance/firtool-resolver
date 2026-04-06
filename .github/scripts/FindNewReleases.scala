@@ -24,7 +24,10 @@ object Releases {
 
   // NOTE: These files must be kept in sync with the artifacts downloaded in build.sc
   val expectedAritfacts = Seq(
-    "firrtl-bin-linux-x64.tar.gz", "firrtl-bin-macos-x64.tar.gz", "firrtl-bin-windows-x64.zip"
+    "firrtl-bin-linux-x64.tar.gz",
+    "firrtl-bin-macos-x64.tar.gz",
+    "firrtl-bin-macos-arm64.tar.gz",
+    "firrtl-bin-windows-x64.zip"
   )
 
   val httpClient: Client[IO] = JavaNetClientBuilder[IO].create

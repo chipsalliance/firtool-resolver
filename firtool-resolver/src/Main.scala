@@ -49,20 +49,16 @@ object Resolve {
   // Important constants
   private def groupId = "org.chipsalliance"
   private def artId = "llvm-firtool"
-  // Use x64 for Apple Silicon
-  private def appleSiliconFixup(logger: Logger, os: String, arch: String): String = {
-    if (os == "macos" && arch == "aarch64") {
-      logger.debug("Using x64 architecture for Apple silicon")
-      "x64"
-    } else {
-      arch
-    }
+  // Returns a fallback platform when a platform's native artifacts may not be available.
+  // macOS aarch64 falls back to x64 (via Rosetta) for versions that lack native arm64 artifacts.
+  private def fallbackPlatform(platform: String): Option[String] = platform match {
+    case "macos-aarch64" => Some("macos-x64")
+    case _ => None
   }
   private def determinePlatform(logger: Logger): Either[String, String] =
     for {
       os <- operatingSystem
-      _arch <- architecture
-      arch = appleSiliconFixup(logger, os, _arch)
+      arch <- architecture
     } yield s"$os-$arch"
   private def binaryName = "firtool"
   private val VersionRegex = """^CIRCT firtool-(\S+)$""".r
@@ -145,10 +141,10 @@ object Resolve {
       logger.debug(platform.merge)
       return Left(platform.merge) // Help out the type system
     }
+    val primaryPlatform = platform.toOption.get
     val resourceLoader = classloader.getOrElse(this.getClass.getClassLoader)
 
     val baseDir = s"$groupId/$artId"
-    val artDir = s"$baseDir/${platform.toOption.get}" // checked above
     val versionFile = resourceLoader.getResource(s"$baseDir/project.version")
     val versionOpt = Try(Source.fromURL(versionFile).mkString).toOption
     if (versionOpt.isEmpty) {
@@ -159,6 +155,21 @@ object Resolve {
 
     val version = versionOpt.get
     logger.debug(s"Firtool version $version found in resources")
+
+    // Try primary platform then fallback (e.g. macos-aarch64 → macos-x64) if no resource found
+    val platformsToTry = Seq(primaryPlatform) ++ fallbackPlatform(primaryPlatform)
+    val effectivePlatform = platformsToTry.find { p =>
+      resourceLoader.getResource(s"$baseDir/$p/bin/firtool") != null
+    }
+    if (effectivePlatform.isEmpty) {
+      val msg = s"firtool binary not found in resources for platforms: ${platformsToTry.mkString(", ")}"
+      logger.debug(msg)
+      return Left(msg)
+    }
+    if (effectivePlatform.get != primaryPlatform) {
+      logger.debug(s"Falling back to ${effectivePlatform.get} resources (no $primaryPlatform resources found)")
+    }
+    val artDir = s"$baseDir/${effectivePlatform.get}"
 
     val destBin = firtoolBin(version)
     val destFile: File = destBin.toFile
@@ -214,34 +225,48 @@ object Resolve {
           return Left(msg)
         case Right(name) => name
       }
-    // See coursier.parse.DependencyParser to understand how the classifier is added via Publication
-    val org = Organization(groupId)
-    val module = Module(org, ModuleName(s"$artId"), Map())
-    val dep =
-      Dependency(module, defaultVersion)
-        .withPublication("", Type.empty, Extension.empty, Classifier(platform))
-    // One would think there'd be a built-in pretty print like this but there isn't
-    //   (coursier.util.Print doesn't include the classifier)
-    logger.debug(s"Attempting to fetch ${dep.module}:${dep.version},clasifier=${platform}")
 
-    val resolution = Try {
-      coursier.Fetch()
-      .addDependencies(dep)
-      .run()
+    // Try fetching for a specific platform classifier; returns Left on any failure.
+    def tryFetch(p: String): Either[String, FirtoolBinary] = {
+      // See coursier.parse.DependencyParser to understand how the classifier is added via Publication
+      val org = Organization(groupId)
+      val module = Module(org, ModuleName(s"$artId"), Map())
+      val dep =
+        Dependency(module, defaultVersion)
+          .withPublication("", Type.empty, Extension.empty, Classifier(p))
+      // One would think there'd be a built-in pretty print like this but there isn't
+      //   (coursier.util.Print doesn't include the classifier)
+      logger.debug(s"Attempting to fetch ${dep.module}:${dep.version},classifier=${p}")
+
+      val resolution = Try {
+        coursier.Fetch()
+          .addDependencies(dep)
+          .run()
+      }
+      if (resolution.isFailure) {
+        val msg = resolution.failed.get.toString + "\n" // Coursier's message is already pretty good
+        logger.debug(msg)
+        return Left(msg)
+      }
+      // Head here is dangerous, without the classifier, multiple jars are fetched
+      val jar = resolution.get.head
+      logger.debug(s"Successfully fetched $jar")
+
+      logger.debug(s"Loading $jar to search its resources")
+      val classloader = new URLClassLoader(Array(jar.toURI.toURL))
+      checkResources(Some(classloader), logger)
     }
-    if (resolution.isFailure) {
-      val msg = resolution.failed.get.toString + "\n" // Coursier's message is already pretty good
-      logger.debug(msg)
-      return Left(msg)
+
+    tryFetch(platform) match {
+      case right @ Right(_) => right
+      case left @ Left(_) =>
+        fallbackPlatform(platform) match {
+          case Some(fallback) =>
+            logger.debug(s"Falling back to platform $fallback")
+            tryFetch(fallback)
+          case None => left
+        }
     }
-    // Head here is dangerous, without the classifier, multiple jars are fetched
-    val jar = resolution.get.head
-    logger.debug(s"Successfully fetched $jar")
-
-
-    logger.debug(s"Loading $jar to search its resources")
-    val classloader = new URLClassLoader(Array(jar.toURI.toURL))
-    checkResources(Some(classloader), logger)
   }
 
   /** Lookup firtool binary

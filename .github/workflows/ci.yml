@@ -13,7 +13,7 @@ jobs:
     name: Run Tests
     uses: ./.github/workflows/test.yml
     with:
-      version: '1.58.0'
+      version: '1.144.0'
       snapshot: 'true'
 
   publish:
