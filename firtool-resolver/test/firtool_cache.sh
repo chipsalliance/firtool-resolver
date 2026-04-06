@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 FIRTOOL=$(
-cs launch --scala $SCALA_VERSION \
+cs launch --repository "$COURSIER_CACHE" --scala $SCALA_VERSION \
   org.chipsalliance::firtool-resolver:$FIRTOOL_RESOLVER_VERSION \
   org.chipsalliance:llvm-firtool:$LLVM_FIRTOOL_VERSION \
   --main firtoolresolver.Main \
