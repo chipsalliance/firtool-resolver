@@ -27,7 +27,7 @@ jobs:
       - name: Publish
         shell: bash
         run: |
-          ./mill -i firtool-resolver[_].publishSigned
+          ./mill -i firtool-resolver[_].publishSonatypeCentral
         env:
           PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
           PGP_SECRET: ${{ secrets.PGP_SECRET }}

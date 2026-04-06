@@ -1,102 +1,73 @@
-// SPDX-License-Identifier: Apache-2.0
+//| # SPDX-License-Identifier: Apache-2.0
+//| # Use JVM client for easier Windows testing in CI
+//| mill-version: 1.1.5-jvm
 
 import mill._
-import scalalib._
-import publish._
-import Assembly._
+import mill.scalalib._
+import mill.scalalib.publish._
+import mill.scalalib.Assembly._
 import mill.util.Jvm
-import mill.scalalib.PublishModule.checkSonatypeCreds
-import mill.api.{Result}
-import $ivy.`de.tototec::de.tobiasroeser.mill.vcs.version::0.4.0`
-import de.tobiasroeser.mill.vcs.version.VcsVersion
-import com.lumidion.sonatype.central.client.core.{PublishingType, SonatypeCredentials}
+import mill.api.Result
 
 case class Platform(os: String, arch: String) {
   override def toString: String = s"$os-$arch"
 }
 object Platform {
-  // Needed to use Platform's in T[_] results
+  // Needed to use Platforms in Task[_] results
   import upickle.default.{ReadWriter, macroRW}
   implicit val rw: ReadWriter[Platform] = macroRW
 }
 
 trait ChipsAlliancePublishModule extends SonatypeCentralPublishModule {
 
-  def isSnapshot: T[Boolean]
+  def isSnapshot: Task[Boolean]
 
-  protected def getEnvVariable(name: String): String =
-    sys.env.get(name).getOrElse(throw new Exception(s"Environment variable $name must be defined!"))
-
-  def gpgArgs: Seq[String] = Seq(
-    "--detach-sign",
-    "--batch=true",
-    "--yes",
-    "--passphrase",
-    getEnvVariable("PGP_PASSPHRASE"),
-    "--armor",
-    "--use-agent"
-  )
-
-  // We cannot call publish from a Command so we inline it, derived from:
-  // https://github.com/com-lihaoyi/mill/blob/e4bcc274cff76534d9b7bdfe6238bd65fc1eaf45/scalalib/src/mill/scalalib/PublishModule.scala#L279
-  // Mill uses the MIT license
-  private def loadSonatypeCreds(): Task[SonatypeCredentials] = T.task {
-    (for {
-      username <- T.env.get("MAVEN_CENTRAL_USERNAME")
-      password <- T.env.get("MAVEN_CENTRAL_PASSWORD")
-    } yield {
-      Result.Success(SonatypeCredentials(username, password))
-    }).getOrElse(
-      Result.Failure(
-        "You must set MAVEN_CENTRAL_USERNAME and MAVEN_CENTRAL_PASSWORD environment variables"
-      )
-    )
+  private def pgp_passphrase = Task.Input {
+    Task.env.getOrElse("PGP_PASSPHRASE", Task.fail("PGP_PASSPHRASE must be defined!"))
   }
 
-  // Helper for publishing, sets values so we don't have to set them on the command-line
-  def publishSigned() = T.command {
-    val readTimeout: Int = 2 * 60 * 1000
-    val connectTimeout: Int = 10 * 1000
-    val awaitTimeout: Int = 10 * 60 * 1000
-    val stagingRelease: Boolean = true
-    val publishingType = PublishingType.AUTOMATIC
-    // We cannot call publish from a Command so we inline it, derived from:
-    // https://github.com/com-lihaoyi/mill/blob/e4bcc274cff76534d9b7bdfe6238bd65fc1eaf45/scalalib/src/mill/scalalib/PublishModule.scala#L177
-    // Mill uses the MIT license
-    val PublishModule.PublishData(artifactInfo, artifacts) = publishArtifacts()
-    new SonatypeCentralPublisher(
-      loadSonatypeCreds()(),
-      gpgArgs,
-      readTimeout,
-      connectTimeout,
-      T.log,
-      T.workspace,
-      T.env,
-      awaitTimeout
-    ).publish(artifacts.map { case (a, b) => (a.path, b) }, artifactInfo, publishingType)
+  override def sonatypeCentralGpgArgs: Task.Simple[String] = Task {
+    Seq(
+      "--detach-sign",
+      "--batch=true",
+      "--yes",
+      "--passphrase",
+      pgp_passphrase(),
+      "--armor",
+      "--use-agent"
+    ).mkString(",")
   }
+
+  // Publishing is now done via mill.scalalib.SonatypeCentralPublishModule/
+  // or by calling publishSonatypeCentral directly
 }
 
 // Must run mill with -i because it uses environment variables:
-// LLVM_FIRTOOL_VERSION - (eg. 1.58.0)
+// FIRTOOL_VERSION - (eg. 1.58.0)
 // LLVM_FIRTOOL_PRERELEASE - 0 means real release (non-SNAPSHOT), otherwise is -SNAPSHOT
 // Maven appears to have an API for resolving classifiers at fetch time,
 // but it's not supported by Coursier: https://github.com/coursier/coursier/issues/2016
 object `llvm-firtool` extends JavaModule with ChipsAlliancePublishModule {
 
-  def firtoolVersion = getEnvVariable("LLVM_FIRTOOL_VERSION")
+  def firtoolVersion = Task.Input {
+    Task.env.getOrElse("FIRTOOL_VERSION", Task.fail("FIRTOOL_VERSION must be defined!"))
+  }
   // FNDDS requires that the publish version start with firtool version with optional -<suffix>
-  def isSnapshot = T { getEnvVariable("LLVM_FIRTOOL_PRERELEASE") != "0" }
+  def isSnapshot = Task.Input {
+    Task.env.getOrElse("LLVM_FIRTOOL_PRERELEASE", Task.fail("LLVM_FIRTOOL_PRERELEASE must be defined!")) != "0"
+  }
 
-  def publishSuffix = T { if (isSnapshot()) "-SNAPSHOT" else "" }
-  def publishVersion = T { firtoolVersion + publishSuffix() }
+  def publishSuffix = Task { if (isSnapshot()) "-SNAPSHOT" else "" }
+  def publishVersion = Task { firtoolVersion() + publishSuffix() }
 
   private def FNDDSSpecVersion = "1.0.0"
   private def groupId = "org.chipsalliance"
   // artifactId is the the name of this object
   private def artId = "llvm-firtool"
   private def binName = "firtool"
-  private def releaseUrl = s"https://github.com/llvm/circt/releases/download/firtool-${firtoolVersion}"
+  private def releaseUrl = Task {
+    s"https://github.com/llvm/circt/releases/download/firtool-${firtoolVersion()}"
+  }
 
   val platforms = Seq[Platform](
     Platform("macos", "x64"),
@@ -119,25 +90,25 @@ object `llvm-firtool` extends JavaModule with ChipsAlliancePublishModule {
 
   // Downloaded tarball for each platform
   // Note that these tarballs must be kept in sync with .github/scripts/FindNewReleases.scala
-  def tarballs = T {
+  def tarballs = Task {
     platforms.map { platform =>
       val tarballName = if (platform.os == "windows") {
         s"firrtl-bin-$platform.zip"
       } else {
         s"firrtl-bin-$platform.tar.gz"
       }
-      val archiveUrl = s"$releaseUrl/$tarballName"
-      val file = T.dest / tarballName
+      val archiveUrl = s"${releaseUrl()}/$tarballName"
+      val file = Task.dest / tarballName
       os.write(file, requests.get.stream(archiveUrl))
       platform -> PathRef(file)
     }
   }
 
-  def extractedDirs = T {
+  def extractedDirs = Task {
     val tarballLookup = tarballs().toMap
     platforms.map { platform =>
       val tarball = tarballLookup(platform)
-      val dir = T.dest / platform.toString
+      val dir = Task.dest / platform.toString
       os.makeDir.all(dir)
       // Windows uses .zip
       if (platform.os == "windows") {
@@ -171,23 +142,23 @@ object `llvm-firtool` extends JavaModule with ChipsAlliancePublishModule {
   }
 
   // Directories that will be turned into platform-specific classifier jars
-  def classifierDirs = T {
+  def classifierDirs = Task {
     extractedDirs().map { case (platform, dir) =>
-      os.copy.into(dir.path, T.dest)
+      os.copy.into(dir.path, Task.dest)
       // We added a platform directory above in extractedDirs, remove it to get actual root
-      val rootDir = T.dest / platform.toString
+      val rootDir = Task.dest / platform.toString
 
       platform -> PathRef(rootDir)
     }
   }
 
   // Classifier jars will be included as extras so that platform-specific jars can be fetched
-  def classifierJars = T {
+  def classifierJars = Task {
     classifierDirs().map { case (platform, dir) =>
-      val jarPath = T.dest / s"$platform.jar"
+      val jarPath = Task.dest / s"$platform.jar"
       Jvm.createJar(
         jarPath,
-        Agg(dir.path, fnddsMetadata().path),
+        Seq(dir.path, fnddsMetadata().path),
         mill.util.JarManifest.MillDefault,
         (_, _) => true
       )
@@ -195,7 +166,7 @@ object `llvm-firtool` extends JavaModule with ChipsAlliancePublishModule {
     }
   }
 
-  def extraPublish = T {
+  def extraPublish = Task {
     classifierJars().map { case (platform, jar) =>
       PublishInfo(
         jar,
@@ -206,16 +177,16 @@ object `llvm-firtool` extends JavaModule with ChipsAlliancePublishModule {
     }
   }
 
-  def fnddsMetadata = T {
+  def fnddsMetadata = Task {
     // Then get the baseDir from there
-    val baseDir = getBaseDir(T.dest)
+    val baseDir = getBaseDir(Task.dest)
     os.makeDir.all(baseDir)
     os.write(baseDir / "FNDDS.version", FNDDSSpecVersion)
     os.write(baseDir / "project.version", publishVersion())
-    PathRef(T.dest)
+    PathRef(Task.dest)
   }
 
-  def localClasspath = T {
+  def localClasspath = Task {
     super.localClasspath() ++ extractedDirs().map { case (_, dir) => dir } ++ Seq(fnddsMetadata())
   }
 }
@@ -237,9 +208,38 @@ trait FirtoolResolver extends CrossScalaModule with ChipsAlliancePublishModule {
 
   def scalacOptions = Seq("-deprecation", "-feature", "-release:8")
 
-  def publishVersion = VcsVersion.vcsState().format(countSep = "+", untaggedSuffix = "-SNAPSHOT")
+  private val rootDir = moduleDir
 
-  def isSnapshot = T { publishVersion().endsWith("-SNAPSHOT") }
+  def publishVersion = Task.Input {
+    val previousTagOpt = {
+      val proc = os.call(("git", "describe", "--tags", "--abbrev=0"), cwd = rootDir, stderr = os.Pipe, check = false)
+      // non-zero exit means not a git repo, e.g. CI
+      Option.when(proc.exitCode == 0) {
+        proc.out.trim()
+      }
+    }
+    previousTagOpt match {
+      case None => "unknown"
+      case Some(previousTag) =>
+        val previousTagNoV = previousTag.stripPrefix("v")
+        val commitsSincePreviousTag = {
+          val proc =
+            os.call(("git", "rev-list", "--count", "HEAD", "--not", previousTag), cwd = rootDir, stderr = os.Pipe)
+          proc.out.trim().toInt
+        }
+        if (commitsSincePreviousTag == 0) {
+          previousTagNoV // really the current tag
+        } else {
+          val currentCommit = {
+            val proc = os.call(("git", "rev-parse", "HEAD"), cwd = rootDir, stderr = os.Pipe)
+            proc.out.trim().take(8) // include first 8 characters of commit hash
+          }
+          s"$previousTagNoV+$commitsSincePreviousTag-$currentCommit-SNAPSHOT"
+        }
+    }
+  }
+
+  def isSnapshot = Task { publishVersion().endsWith("-SNAPSHOT") }
 
   def pomSettings = PomSettings(
     description = "Fetcher for native firtool binary",
@@ -253,26 +253,26 @@ trait FirtoolResolver extends CrossScalaModule with ChipsAlliancePublishModule {
   )
 
   // The outer project has no sources
-  def sources = T { Seq.empty[PathRef] }
+  def sources = Task { Seq.empty[PathRef] }
 
-  def mainClass = T { Some("firtoolresolver.Main") }
+  def mainClass = Task { Some("firtoolresolver.Main") }
 
   // We unzip the core assembly into our unmanaged classpath so it can then be
   // rezipped up into our jar (and published).
-  def unmanagedClasspath = T {
-    val dir = T.dest
+  def unmanagedClasspath = Task {
+    val dir = Task.dest
     os.remove.all(dir)
     os.makeDir(dir)
     os.proc("unzip", core.assembly().path)
       .call(cwd = dir)
-    Agg(PathRef(dir))
+    Seq(PathRef(dir))
   }
 
   // TODO These are the things stripped from upstreamAssemblyClasspath (in addition to scala-library).
   // Is it possible to derive these automatically?
-  def ivyDeps = Agg(
-    ivy"org.scala-lang.modules::scala-xml:2.2.0",
-    ivy"org.scala-lang.modules::scala-collection-compat:2.11.0"
+  def mvnDeps = Seq(
+    mvn"org.scala-lang.modules::scala-xml:2.2.0",
+    mvn"org.scala-lang.modules::scala-collection-compat:2.11.0"
   )
 
   object core extends ScalaModule {
@@ -286,13 +286,13 @@ trait FirtoolResolver extends CrossScalaModule with ChipsAlliancePublishModule {
 
     // We cannot use os-lib because it cannot be shaded without screwing up
     // getting System property os.name
-    def ivyDeps = Agg(
-      ivy"dev.dirs:directories:26",
-      ivy"io.get-coursier::coursier:2.1.8",
+    def mvnDeps = Seq(
+      mvn"dev.dirs:directories:26",
+      mvn"io.get-coursier::coursier:2.1.8",
     )
 
     // Modify the classpath to remove things we want to dynamically link (Scala jars).
-    override def upstreamAssemblyClasspath: T[Agg[PathRef]] = T {
+    override def upstreamAssemblyClasspath = Task {
       val all = super.upstreamAssemblyClasspath()
       // Remove Scala jars.
       // This removes scala-library, scala-collection-compat, and scala-xml.
@@ -302,7 +302,7 @@ trait FirtoolResolver extends CrossScalaModule with ChipsAlliancePublishModule {
 
     // Our assembly is not intended to be an executable.
     // Including the launcher causes unzip to fail.
-    override def prependShellScript: T[String] = T { "" }
+    override def prependShellScript = Task { "" }
 
     // It would be nice if this could be derived from dependencies.
     def packagesToShade = Seq(

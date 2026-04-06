@@ -37,6 +37,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - name: Install wget (Windows)
         if: matrix.os == 'windows'
         run: choco install wget
@@ -65,7 +67,7 @@ jobs:
             IS_PRERELEASE=0
           fi
           echo "LLVM_FIRTOOL_PRERELEASE=$IS_PRERELEASE" >> "$GITHUB_ENV"
-          echo "LLVM_FIRTOOL_VERSION=${{ inputs.version }}" >> "$GITHUB_ENV"
+          echo "FIRTOOL_VERSION=${{ inputs.version }}" >> "$GITHUB_ENV"
       - name: Run Test
         shell: bash
         run: |
