@@ -13,6 +13,11 @@ import com.lumidion.sonatype.central.client.core.{PublishingType, SonatypeCreden
 
 case class Platform(os: String, arch: String) {
   override def toString: String = s"$os-$arch"
+  // CIRCT release artifacts use "arm64" but FNDDS uses "aarch64"
+  def circtArtifactName: String = (os, arch) match {
+    case ("macos", "aarch64") => "macos-arm64"
+    case _ => this.toString
+  }
 }
 object Platform {
   // Needed to use Platform's in T[_] results
@@ -78,7 +83,7 @@ trait ChipsAlliancePublishModule extends SonatypeCentralPublishModule {
 }
 
 // Must run mill with -i because it uses environment variables:
-// LLVM_FIRTOOL_VERSION - (eg. 1.58.0)
+// LLVM_FIRTOOL_VERSION - (eg. 1.144.0)
 // LLVM_FIRTOOL_PRERELEASE - 0 means real release (non-SNAPSHOT), otherwise is -SNAPSHOT
 // Maven appears to have an API for resolving classifiers at fetch time,
 // but it's not supported by Coursier: https://github.com/coursier/coursier/issues/2016
@@ -100,6 +105,7 @@ object `llvm-firtool` extends JavaModule with ChipsAlliancePublishModule {
 
   val platforms = Seq[Platform](
     Platform("macos", "x64"),
+    Platform("macos", "aarch64"),
     Platform("linux", "x64"),
     Platform("windows", "x64")
   )
@@ -122,9 +128,9 @@ object `llvm-firtool` extends JavaModule with ChipsAlliancePublishModule {
   def tarballs = T {
     platforms.map { platform =>
       val tarballName = if (platform.os == "windows") {
-        s"firrtl-bin-$platform.zip"
+        s"firrtl-bin-${platform.circtArtifactName}.zip"
       } else {
-        s"firrtl-bin-$platform.tar.gz"
+        s"firrtl-bin-${platform.circtArtifactName}.tar.gz"
       }
       val archiveUrl = s"$releaseUrl/$tarballName"
       val file = T.dest / tarballName
@@ -134,9 +140,7 @@ object `llvm-firtool` extends JavaModule with ChipsAlliancePublishModule {
   }
 
   def extractedDirs = T {
-    val tarballLookup = tarballs().toMap
-    platforms.map { platform =>
-      val tarball = tarballLookup(platform)
+    tarballs().map { case (platform, tarball) =>
       val dir = T.dest / platform.toString
       os.makeDir.all(dir)
       // Windows uses .zip
