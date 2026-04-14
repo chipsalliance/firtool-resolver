@@ -21,7 +21,7 @@ jobs:
           key: ${{ runner.os }}-FindNewReleases-${{ hashFiles('.github/scripts/FindNewReleases.scala') }}
       # Dont bother caching Scala build, we rarely need to rebuild FindNewReleases
       - name: Setup Scala
-        uses: VirtusLab/scala-cli-setup@v1
+        uses: VirtusLab/scala-cli-setup@14e5155ee896fcc200f66f92c9eb7a3dd9b58e0d # v1.12.5
         if: steps.docache.outputs.cache-hit != 'true'
         with:
           jvm: 'graalvm-community:21.0.2'
