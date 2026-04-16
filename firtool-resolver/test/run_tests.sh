@@ -21,6 +21,23 @@ $THIS_DIR/negative.sh 2>&1 | FileCheck $THIS_DIR/negative.sh
 
 ./mill firtool-resolver[$SCALA_VERSION].publishLocal
 
+# Sanity check: the firtool-resolver jar must not bundle scala-library or other scala jars
+RESOLVER_JAR="out/firtool-resolver/$SCALA_VERSION/jar.dest/out.jar"
+if [[ ! -f "$RESOLVER_JAR" ]]; then
+  echo "ERROR: firtool-resolver jar not found at $RESOLVER_JAR"
+  exit 1
+fi
+if jar tf "$RESOLVER_JAR" | grep -q "^scala"; then
+  echo "ERROR: firtool-resolver jar contains scala entries that should not be bundled:"
+  jar tf "$RESOLVER_JAR" | grep "^scala" | head -10
+  exit 1
+fi
+# Also sanity check that we're checking the correct jar
+if ! jar tf "$RESOLVER_JAR" | grep -q "^firtoolresolver/"; then
+  echo "ERROR: firtool-resolver jar is missing firtoolresolver/ classes"
+  exit 1
+fi
+
 $THIS_DIR/on_classpath.sh 2>&1 | FileCheck -DLLVM_FIRTOOL_VERSION="$LLVM_FIRTOOL_VERSION" -DFIRTOOL_VERSION="$FIRTOOL_VERSION" $THIS_DIR/on_classpath.sh
 
 $THIS_DIR/installed.sh 2>&1 | FileCheck -DLLVM_FIRTOOL_VERSION="$LLVM_FIRTOOL_VERSION" -DFIRTOOL_VERSION="$FIRTOOL_VERSION" $THIS_DIR/installed.sh
