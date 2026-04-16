@@ -296,12 +296,11 @@ trait FirtoolResolver extends CrossScalaModule with ChipsAlliancePublishModule {
     )
 
     // Modify the classpath to remove things we want to dynamically link (Scala jars).
-    override def upstreamAssemblyClasspath: T[Agg[PathRef]] = T {
-      val all = super.upstreamAssemblyClasspath()
-      // Remove Scala jars.
-      // This removes scala-library, scala-collection-compat, and scala-xml.
-      val regex = """.*/scala[^\/]*\.jar""".r
-      all.filterNot(path => regex.matches(path.toString))
+    override def upstreamIvyAssemblyClasspath: T[Agg[PathRef]] = T {
+      val all = super.upstreamIvyAssemblyClasspath()
+      // Remove Scala jars (scala-library, scala-collection-compat, scala-xml, etc.)
+      val regex = """scala.*\.jar""".r
+      all.filterNot(p => regex.matches(p.path.last))
     }
 
     // Our assembly is not intended to be an executable.
