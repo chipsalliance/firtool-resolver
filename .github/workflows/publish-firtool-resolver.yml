@@ -15,12 +15,11 @@ jobs:
         with:
           fetch-depth: 0
       - name: Install Scala and Coursier
-        uses: coursier/setup-action@v2
+        uses: coursier/setup-action@fd1707a76b027efdfb66ca79318b4d29b72e5a02 # v3.0.0
         with:
           jvm: temurin:17
       - name: Import GPG key
-        # This is crazy-max/ghaction-import-gpg@v6.3.0, using commit for security reasons
-        uses: crazy-max/ghaction-import-gpg@e89d40939c28e39f97cf32126055eeae86ba74ec
+        uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd # v7.0.0
         with:
           gpg_private_key: ${{ secrets.PGP_SECRET }}
           passphrase: ${{ secrets.PGP_PASSPHRASE }}
