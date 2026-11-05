@@ -27,7 +27,7 @@ jobs:
             ext: ""
           - runner: macos-15
             os: macos
-            arch: x64 # Technically it's x64 but we rely on Rosetta for the time being.
+            arch: x64 # FileCheck runs through Rosetta; firtool uses native arm64 when available.
             ext: ""
           - runner: windows-2025
             os: windows
@@ -72,4 +72,3 @@ jobs:
           # First run of mill is important to set itself up
           ./mill resolve _
           ./firtool-resolver/test/run_tests.sh ${{ matrix.os }} ${{ matrix.scala-version }}
-

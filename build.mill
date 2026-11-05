@@ -91,7 +91,7 @@ object `llvm-firtool` extends JavaModule with ChipsAlliancePublishModule {
 
   def firtoolVersion = getEnvVariable("LLVM_FIRTOOL_VERSION")
   // FNDDS requires that the publish version start with firtool version with optional -<suffix>
-  def isSnapshot = T { getEnvVariable("LLVM_FIRTOOL_PRERELEASE") != "0" }
+  def isSnapshot = T.input { getEnvVariable("LLVM_FIRTOOL_PRERELEASE") != "0" }
 
   def publishSuffix = T { if (isSnapshot()) "-SNAPSHOT" else "" }
   def publishVersion = T { firtoolVersion + publishSuffix() }

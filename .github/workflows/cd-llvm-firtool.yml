@@ -2,9 +2,6 @@ name: Continuous Delivery of llvm-firtool
 
 on:
   workflow_dispatch:
-  # Run every 15 min, checking for new releases is cheap.
-  schedule:
-    - cron: '*/15 * * * *'
 
 
 jobs:
