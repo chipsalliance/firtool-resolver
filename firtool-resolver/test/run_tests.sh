@@ -34,7 +34,7 @@ mill_run llvm-firtool.publishLocal
 
 mill_run firtool-resolver[$SCALA_VERSION].publishLocal
 
-mill_run firtool-resolver[$SCALA_VERSION].test.run
+mill_run firtool-resolver[$SCALA_VERSION].test
 
 # The build needs the unsuffixed version; legacy launches need the published one.
 export LLVM_FIRTOOL_VERSION=$LLVM_FIRTOOL_ARTIFACT_VERSION

@@ -293,6 +293,9 @@ trait FirtoolResolver extends CrossScalaModule with ChipsAlliancePublishModule {
     def ivyDeps = Agg(
       ivy"dev.dirs:directories:26",
       ivy"io.get-coursier::coursier:2.1.8",
+      // Already bundled transitively by Coursier and shaded by org.apache.commons.
+      // Declare it directly since Archive now uses its tar reader.
+      ivy"org.apache.commons:commons-compress:1.24.0",
     )
 
     // Modify the classpath to remove things we want to dynamically link (Scala jars).
@@ -333,5 +336,18 @@ trait FirtoolResolver extends CrossScalaModule with ChipsAlliancePublishModule {
       ) ++ packagesToShade.map(p =>
         Rule.Relocate(s"$p.**", s"firtoolresolver.shaded.$p.@1")
       )
+  }
+
+  // Hermetic checks for archive extraction and the resolution flow.
+  object test extends ScalaModule with TestModule.Munit {
+    def scalaVersion = root.scalaVersion
+    def scalacOptions = root.scalacOptions
+    def moduleDeps = Seq(core)
+    def ivyDeps = Agg(ivy"org.scalameta::munit:1.3.6")
+    // Mill loads tests through a separate classloader. Give subprocess tests
+    // the complete classpath explicitly rather than the test runner's launcher.
+    def forkArgs = T {
+      Seq("-Dfirtoolresolver.test.classpath=" + runClasspath().map(_.path.toString).mkString(java.io.File.pathSeparator))
+    }
   }
 }

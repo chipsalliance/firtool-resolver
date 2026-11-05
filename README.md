@@ -43,7 +43,7 @@ cs launch --scala 2.13 org.chipsalliance::firtool-resolver:2.2.0 \
 
 Properties take precedence over the corresponding environment variables. Version strings must contain only ASCII letters, digits, `.`, `+`, `_`, or `-`, and cannot be `.` or `..`.
 
-Direct downloads require access to **github.com** and **release-assets.githubusercontent.com**. Standard JVM proxy properties (`https.proxyHost`, `https.proxyPort`, and the corresponding HTTP properties for HTTP mirrors) are honored. `HTTPS_PROXY` and `NO_PROXY` environment variables are not parsed by the GitHub downloader.
+Direct downloads require access to **github.com** and **release-assets.githubusercontent.com**. Standard JVM proxy properties (`https.proxyHost`, `https.proxyPort`, and the corresponding HTTP properties for HTTP mirrors) are honored.
 
 To use an internal HTTP server, an Artifactory generic remote, or a local `file:` mirror, set the release base URL. The mirror must provide both the archive and its `.sha256` file at:
 
@@ -65,11 +65,11 @@ Checksum files may contain just the hex digest or a digest followed by a filenam
 
 ### Development and release
 
-Run `./mill 'firtool-resolver[_].test.run'` for hermetic archive and resolver tests. The FileCheck integration suite is `./firtool-resolver/test/run_tests.sh <linux|macos|windows> <2.12|2.13>`; it requires Coursier, FileCheck, Python 3, and network access, along with `LLVM_FIRTOOL_VERSION` and `LLVM_FIRTOOL_PRERELEASE` for the retained legacy `publishLocal` build.
+Run `./mill -i 'firtool-resolver[_].test'` for the hermetic MUnit archive and resolver tests on both Scala versions, or `./mill -i 'firtool-resolver[2.13].test'` for just Scala 2.13.
 
-The release target is **2.2.0**. Versions remain derived from Git tags: tagging `v2.2.0` triggers the existing CI and publishing workflow for both Scala versions.
+The FileCheck integration suite is `./firtool-resolver/test/run_tests.sh <linux|macos|windows> <2.12|2.13>`; it requires Coursier, FileCheck, Python 3, and network access, along with `LLVM_FIRTOOL_VERSION` and `LLVM_FIRTOOL_PRERELEASE` for the retained legacy `publishLocal` build.
 
-# Firtool Native Dependency Distribution Specification (FNDDS, legacy)
+# Firtool Native Dependency Distribution Specification (FNDDS) (legacy)
 
 This specification follows [Semantic Versioning 2.0.0](https://semver.org).
 
