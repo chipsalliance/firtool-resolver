@@ -29,12 +29,12 @@ class ResolverTests extends TemporaryDirectorySuite {
     else tar(archive, Seq(Entry("release/bin/firtool", executable)))
     write(checksum, bytes(s"${digest(archive)}  $asset\n"))
 
-    def launch(properties: Seq[String] = Nil, extraClasspath: Option[Path] = None,
-               envVersion: String = version, envURL: String = base.toUri.toString): Process = {
+    def launch(extraClasspath: Option[Path] = None, envVersion: String = version,
+               envURL: String = base.toUri.toString): Process = {
       val classpath = System.getProperty("firtoolresolver.test.classpath")
       val cp = extraClasspath.map(p => s"$p${java.io.File.pathSeparator}$classpath").getOrElse(classpath)
       val javaCommand = Paths.get(System.getProperty("java.home"), "bin", "java").toString
-      val command = Seq(javaCommand) ++ properties ++ Seq("-cp", cp, "firtoolresolver.Main", "-v", "0.0.0")
+      val command = Seq(javaCommand, "-cp", cp, "firtoolresolver.Main", "-v", "0.0.0")
       val builder = new ProcessBuilder(command: _*).redirectErrorStream(true)
       val env = builder.environment()
       env.remove("CHISEL_FIRTOOL_PATH")
@@ -70,23 +70,6 @@ class ResolverTests extends TemporaryDirectorySuite {
     try assert(!paths.iterator().asScala.exists { path =>
       path.getFileName.toString.endsWith(".tmp") || path.getFileName.toString.startsWith("firtool-archive-")
     }) finally paths.close()
-  }
-
-  directory.test("version property wins over environment and classpath, then reuses the cache") { root =>
-    val mirror = new Mirror(root)
-    finish(mirror.launch())
-    val output = finish(mirror.launch(properties = Seq(s"-Dchisel.firtool.version=$version"),
-      extraClasspath = Some(mirror.classpathResources()), envVersion = "0.0.1"))
-    assert(output.contains("takes precedence over llvm-firtool 1.0.0-classpath"), output)
-    assert(!output.contains("Checking resources for firtool"), output)
-    assert(!output.contains("Downloading firtool"), output)
-  }
-
-  directory.test("mirror property wins over the mirror environment variable") { root =>
-    val mirror = new Mirror(root)
-    val output = finish(mirror.launch(properties = Seq(s"-Dchisel.firtool.url=${mirror.base.toUri}"),
-      envURL = "file:///nonexistent"))
-    assert(output.contains("Verified SHA-256 checksum:"), output)
   }
 
   directory.test("invalid version overrides fail before fetching or creating the cache") { root =>

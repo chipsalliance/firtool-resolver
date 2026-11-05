@@ -65,9 +65,9 @@ Checksum files may contain just the hex digest or a digest followed by a filenam
 
 ### Development and release
 
-Run `./mill -i 'firtool-resolver[_].test'` for the hermetic MUnit archive and resolver tests on both Scala versions, or `./mill -i 'firtool-resolver[2.13].test'` for just Scala 2.13.
+Run `./mill -i 'firtool-resolver[_].test'` for the hermetic MUnit resolver tests on both Scala versions, or `./mill -i 'firtool-resolver[2.13].test'` for just Scala 2.13.
 
-The FileCheck integration suite is `./firtool-resolver/test/run_tests.sh <linux|macos|windows> <2.12|2.13>`; it requires Coursier, FileCheck, Python 3, and network access, along with `LLVM_FIRTOOL_VERSION` and `LLVM_FIRTOOL_PRERELEASE` for the retained legacy `publishLocal` build.
+The FileCheck integration suite is `./firtool-resolver/test/run_tests.sh <linux|macos|windows> <2.12|2.13>`; it requires Coursier, FileCheck, and network access, along with `LLVM_FIRTOOL_VERSION` and `LLVM_FIRTOOL_PRERELEASE` for the retained legacy `publishLocal` build.
 
 # Firtool Native Dependency Distribution Specification (FNDDS) (legacy)
 

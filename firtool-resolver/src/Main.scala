@@ -233,67 +233,76 @@ object Resolve {
     }
   }
 
+  /** Run body while holding the per-version cache lock, both within this JVM and across processes. */
+  private def withVersionLock[A](logger: Logger, version: String)(body: => A): A = this.synchronized {
+    val cache = Paths.get(cacheDir)
+    Files.createDirectories(cache)
+    val lockPath = cache.resolve(s"$version.lock")
+    logger.debug(s"Acquiring firtool cache lock $lockPath")
+    val channel = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE)
+    try {
+      val lock = channel.lock()
+      try body
+      finally lock.release()
+    } finally channel.close()
+  }
+
+  /** Find the release asset for the primary platform, or else for its fallback platform. */
+  private def findRelease(logger: Logger, version: String, primary: String): Either[String, GitHub.Release] =
+    GitHub.lookup(logger, version, primary) match {
+      case Some(release) => Right(release)
+      case None =>
+        val fallback = fallbackPlatform(primary)
+        fallback.flatMap(GitHub.lookup(logger, version, _)) match {
+          case Some(release) =>
+            logger.warn(s"Falling back to platform ${release.platform} (no $primary release asset for firtool $version)")
+            Right(release)
+          case None =>
+            val platforms = (primary +: fallback.toSeq).mkString(" or ")
+            Left(s"No GitHub release asset for firtool $version on $platforms")
+        }
+    }
+
+  private def warnIfVersionDiffers(logger: Logger, binary: Path, version: String): Unit = {
+    val output = mutable.ArrayBuffer.empty[String]
+    val command = Seq(binary.toString, "--version")
+    logger.debug(s"Running: ${command.mkString(" ")}")
+    Try(command.!(ProcessLogger(output += _))) match {
+      case Success(0) =>
+        output.collectFirst { case VersionRegex(v) => v }.filter(_ != version).foreach { actual =>
+          logger.warn(s"Downloaded firtool version $actual differs from requested version $version")
+        }
+      case result => logger.warn(s"Unable to check downloaded firtool version: $result ${output.mkString("\n")}")
+    }
+  }
+
   private def fetchFromGitHub(logger: Logger, version: String): Either[String, FirtoolBinary] = {
     logger.debug(s"Attempting to fetch firtool $version from GitHub releases")
     val result = Try {
-      val primary = determinePlatform(logger).fold(msg => throw new Exception(msg), identity)
-      val platforms = Seq(primary) ++ fallbackPlatform(primary)
-      this.synchronized {
-        val cache = Paths.get(cacheDir)
-        Files.createDirectories(cache)
-        val lockPath = cache.resolve(s"$version.lock")
-        logger.debug(s"Acquiring firtool cache lock $lockPath")
-        val channel = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE)
-        try {
-          val lock = channel.lock()
-          try {
-            checkInstalled(logger, version) match {
-              case Right(binary) => binary
-              case Left(_) =>
-                val directory = cache.resolve(version)
-                Files.createDirectories(directory)
-                val missing = mutable.ArrayBuffer.empty[String]
-                val downloaded = platforms.iterator.map { platform =>
-                  if (platform != primary) logger.warn(s"Falling back to platform $platform (no $primary release asset)")
-                  GitHub.fetch(logger, version, platform, directory) match {
-                    case Some(archive) => Some((platform, archive))
-                    case None =>
-                      val msg = s"No GitHub release asset for firtool $version on $platform"
-                      logger.debug(msg)
-                      missing += msg
-                      None
-                  }
-                }.collectFirst { case Some(download) => download }
-                val (platform, archive) = downloaded.getOrElse(throw new Exception(missing.mkString("\n")))
-                val destination = firtoolBin(version)
-                try {
-                  logger.debug(s"Extracting firtool from $archive")
-                  installBinary(logger, destination) { tmp =>
-                    Archive.extract(archive, platform.startsWith("windows-"), tmp)
-                  }
-                } finally Files.deleteIfExists(archive)
-                val output = mutable.ArrayBuffer.empty[String]
-                val command = Seq(destination.toString, "--version")
-                logger.debug(s"Running: ${command.mkString(" ")}")
-                Try(command.!(ProcessLogger(output += _))) match {
-                  case Success(0) =>
-                    output.collectFirst { case VersionRegex(v) => v }.foreach { actual =>
-                      if (actual != version) logger.warn(s"Downloaded firtool version $actual differs from requested version $version")
-                    }
-                  case result => logger.warn(s"Unable to check downloaded firtool version: $result ${output.mkString("\n")}")
-                }
-                FirtoolBinary(destination.toFile, version)
+      for {
+        primary <- determinePlatform(logger)
+        binary <- withVersionLock(logger, version) {
+          // Another process may have installed this version while we waited for the lock.
+          checkInstalled(logger, version).left.flatMap { _ =>
+            findRelease(logger, version, primary).map { release =>
+              val destination = firtoolBin(version)
+              val directory = Files.createDirectories(destination.getParent.getParent)
+              val archive = GitHub.download(logger, release, directory)
+              try {
+                logger.debug(s"Extracting firtool from $archive")
+                installBinary(logger, destination)(Archive.extract(archive, release.windows, _))
+              } finally Files.deleteIfExists(archive)
+              warnIfVersionDiffers(logger, destination, version)
+              FirtoolBinary(destination.toFile, version)
             }
-          } finally lock.release()
-        } finally channel.close()
-      }
+          }
+        }
+      } yield binary
     }
-    result match {
-      case Success(binary) => Right(binary)
-      case Failure(error) =>
-        val msg = s"Fetching firtool $version from GitHub failed: $error"
-        logger.debug(msg)
-        Left(msg)
+    result.toEither.left.map(_.toString).flatMap(identity).left.map { error =>
+      val msg = s"Fetching firtool $version from GitHub failed: $error"
+      logger.debug(msg)
+      msg
     }
   }
 

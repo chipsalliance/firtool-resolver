@@ -13,38 +13,32 @@ private[firtoolresolver] object GitHub {
   private class HttpError(val status: Int, url: URL)
       extends IOException(s"HTTP $status downloading $url")
 
+  /** A published release asset for one platform, with its expected SHA-256. */
+  final case class Release(version: String, platform: String, url: URL, sha256: String) {
+    def windows: Boolean = platform.startsWith("windows-")
+  }
+
   private def withStream[A](url: URL)(read: InputStream => A): A = {
-    def open(current: URL, redirects: Int): A = {
-      val connection = current.openConnection()
-      connection.setConnectTimeout(10000)
-      connection.setReadTimeout(60000)
-      connection.setRequestProperty("User-Agent", "firtool-resolver")
-      val http = connection match {
-        case h: HttpURLConnection => Some(h)
-        case _ => None
+    val connection = url.openConnection()
+    connection.setConnectTimeout(10000)
+    connection.setReadTimeout(60000)
+    connection.setRequestProperty("User-Agent", "firtool-resolver")
+    try {
+      connection match {
+        // HttpURLConnection follows redirects (GitHub redirects to release-assets.githubusercontent.com),
+        // but never across protocols, so an https download cannot be downgraded to http.
+        case http: HttpURLConnection =>
+          val status = http.getResponseCode
+          if (status != 200) throw new HttpError(status, http.getURL)
+        case _ =>
       }
-      try {
-        http.foreach(_.setInstanceFollowRedirects(false))
-        val status = http.map(_.getResponseCode).getOrElse(200)
-        if (Set(301, 302, 303, 307, 308).contains(status)) {
-          if (redirects >= 10) throw new IOException(s"Too many redirects downloading $url")
-          val location = connection.getHeaderField("Location")
-          if (location == null) throw new IOException(s"Missing redirect location downloading $current")
-          val next = new URL(current, location)
-          if (next.getProtocol != "https" && next.getProtocol != "http") {
-            throw new IOException(s"Unsupported redirect URL: $next")
-          }
-          open(next, redirects + 1)
-        } else if (status != 200) {
-          throw new HttpError(status, current)
-        } else {
-          val stream = connection.getInputStream
-          try read(stream)
-          finally stream.close()
-        }
-      } finally http.foreach(_.disconnect())
+      val stream = connection.getInputStream
+      try read(stream)
+      finally stream.close()
+    } finally connection match {
+      case http: HttpURLConnection => http.disconnect()
+      case _ =>
     }
-    open(url, 0)
   }
 
   private def retry[A](logger: Logger, url: URL)(download: => A): A = {
@@ -67,18 +61,17 @@ private[firtoolresolver] object GitHub {
     throw new IllegalStateException("unreachable")
   }
 
-  /** None means the checksum asset is not published, so a fallback platform may be tried. */
-  def fetch(logger: Logger, version: String, platform: String, directory: Path): Option[Path] = {
+  /** Look up the release asset and its checksum. None means the asset is not published for this platform. */
+  def lookup(logger: Logger, version: String, platform: String): Option[Release] = {
     val circtPlatform = if (platform == "macos-aarch64") "macos-arm64" else platform
     val extension = if (platform.startsWith("windows-")) "zip" else "tar.gz"
-    val asset = s"firrtl-bin-$circtPlatform.$extension"
     val base = sys.props.get("chisel.firtool.url")
       .orElse(sys.env.get("CHISEL_FIRTOOL_URL"))
       .getOrElse("https://github.com/llvm/circt/releases/download")
-    val url = new URL(s"${base.stripSuffix("/")}/firtool-$version/$asset")
+    val url = new URL(s"${base.stripSuffix("/")}/firtool-$version/firrtl-bin-$circtPlatform.$extension")
     val checksumUrl = new URL(s"$url.sha256")
     logger.debug(s"Downloading SHA-256 checksum from $checksumUrl")
-    val checksum = try {
+    val checksum = try Some {
       retry(logger, checksumUrl) {
         withStream(checksumUrl) { stream =>
           val source = Source.fromInputStream(stream, "UTF-8")
@@ -93,11 +86,24 @@ private[firtoolresolver] object GitHub {
         }
       }
     } catch {
-      case e: HttpError if e.status == 404 => return None
-      case _: FileNotFoundException if url.getProtocol == "file" => return None
+      case e: HttpError if e.status == 404 => None
+      case _: FileNotFoundException if url.getProtocol == "file" => None
     }
-    logger.debug(s"Expected SHA-256: $checksum")
-    logger.info(s"Downloading firtool $version for $platform from $url")
+    checksum match {
+      case Some(hash) =>
+        logger.debug(s"Expected SHA-256: $hash")
+        Some(Release(version, platform, url, hash))
+      case None =>
+        logger.debug(s"No GitHub release asset for firtool $version on $platform")
+        None
+    }
+  }
+
+  /** Download the release archive into directory and verify its checksum. */
+  def download(logger: Logger, release: Release, directory: Path): Path = {
+    val url = release.url
+    logger.info(s"Downloading firtool ${release.version} for ${release.platform} from $url")
+    val extension = if (release.windows) "zip" else "tar.gz"
     val archive = Files.createTempFile(directory, "firtool-archive-", s".$extension")
     var keep = false
     try {
@@ -117,12 +123,12 @@ private[firtoolresolver] object GitHub {
         }
         digest.digest().map(b => f"${b & 0xff}%02x").mkString
       }
-      if (actual != checksum) {
-        throw new IOException(s"SHA-256 checksum mismatch for $url: expected $checksum, actual $actual")
+      if (actual != release.sha256) {
+        throw new IOException(s"SHA-256 checksum mismatch for $url: expected ${release.sha256}, actual $actual")
       }
       logger.debug(s"Verified SHA-256 checksum: $actual")
       keep = true
-      Some(archive)
+      archive
     } finally if (!keep) Files.deleteIfExists(archive)
   }
 }

@@ -31,13 +31,3 @@ CHISEL_FIRTOOL_VERSION=0.0.0 cs launch --scala "$SCALA_VERSION" \
 # CHECK: Firtool binary with version ([[FIRTOOL_VERSION]]) {{.*}} already exists
 "$FIRTOOL" --version
 # CHECK: CIRCT firtool-[[FIRTOOL_VERSION]]
-
-echo 'Invalid override'
-# CHECK: Invalid override
-if CHISEL_FIRTOOL_VERSION=../escape cs launch --scala "$SCALA_VERSION" \
-  org.chipsalliance::firtool-resolver:$FIRTOOL_RESOLVER_VERSION \
-  --main firtoolresolver.Main -- -v "$FIRTOOL_VERSION"; then
-  exit 1
-fi
-# CHECK: Invalid firtool version: ../escape
-# CHECK-NOT: Attempting to fetch

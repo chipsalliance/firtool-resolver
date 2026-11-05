@@ -6,10 +6,10 @@ import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.{Files, Path}
 import java.security.MessageDigest
 import java.util.zip.{GZIPOutputStream, ZipEntry, ZipOutputStream}
-import org.apache.commons.compress.archivers.tar.{TarArchiveEntry, TarArchiveOutputStream, TarConstants}
+import org.apache.commons.compress.archivers.tar.{TarArchiveEntry, TarArchiveOutputStream}
 import scala.jdk.CollectionConverters._
 
-/** Archive builders shared by the extraction and local-mirror tests. */
+/** Builders for local release mirrors and Maven fixtures. */
 private[firtoolresolver] object TestFixtures {
   def bytes(value: String): Array[Byte] = value.getBytes(UTF_8)
 
@@ -18,27 +18,16 @@ private[firtoolresolver] object TestFixtures {
     Files.write(path, value)
   }
 
-  case class Entry(name: String, data: Array[Byte], symbolicLink: Boolean = false)
+  case class Entry(name: String, data: Array[Byte])
 
-  def tar(path: Path, entries: Seq[Entry], longFileMode: Int = TarArchiveOutputStream.LONGFILE_POSIX): Unit = {
-    val output = new TarArchiveOutputStream(new GZIPOutputStream(Files.newOutputStream(path)), "UTF-8")
-    try {
-      output.setLongFileMode(longFileMode)
-      output.setAddPaxHeadersForNonAsciiNames(true)
-      entries.foreach { fixture =>
-        val entry = if (fixture.symbolicLink) {
-          val link = new TarArchiveEntry(fixture.name, TarConstants.LF_SYMLINK)
-          link.setLinkName("elsewhere")
-          link
-        } else {
-          val file = new TarArchiveEntry(fixture.name)
-          file.setSize(fixture.data.length.toLong)
-          file
-        }
-        output.putArchiveEntry(entry)
-        if (!fixture.symbolicLink) output.write(fixture.data)
-        output.closeArchiveEntry()
-      }
+  def tar(path: Path, entries: Seq[Entry]): Unit = {
+    val output = new TarArchiveOutputStream(new GZIPOutputStream(Files.newOutputStream(path)))
+    try entries.foreach { fixture =>
+      val entry = new TarArchiveEntry(fixture.name)
+      entry.setSize(fixture.data.length.toLong)
+      output.putArchiveEntry(entry)
+      output.write(fixture.data)
+      output.closeArchiveEntry()
     } finally output.close()
   }
 

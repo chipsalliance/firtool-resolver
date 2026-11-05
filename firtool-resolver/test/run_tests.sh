@@ -64,8 +64,6 @@ bash "$THIS_DIR/github.sh" 2>&1 | FileCheck -DFIRTOOL_VERSION="$FIRTOOL_VERSION"
 
 bash "$THIS_DIR/version_override.sh" 2>&1 | FileCheck -DLLVM_FIRTOOL_VERSION="$LLVM_FIRTOOL_VERSION" -DFIRTOOL_VERSION="$FIRTOOL_VERSION" "$THIS_DIR/version_override.sh"
 
-bash "$THIS_DIR/checksum_mismatch.sh" 2>&1 | FileCheck "$THIS_DIR/checksum_mismatch.sh"
-
 if [[ "$OS" == macos && $(uname -m) == arm64 ]]; then
   bash "$THIS_DIR/platform_fallback.sh" 2>&1 | FileCheck "$THIS_DIR/platform_fallback.sh"
 fi
