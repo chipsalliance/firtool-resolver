@@ -1,7 +1,7 @@
 # Firtool Resolver and LLVM Firtool Native
 
 Firtool Resolver is a Scala library and command-line application for resolving and downloading [LLVM Firtool](https://github.com/llvm/circt).
-Starting with **2.2.0**, it downloads binaries directly from CIRCT's GitHub releases and verifies their SHA-256 checksums. It supports Scala 2.12 and 2.13, with the existing `Resolve`, `FirtoolBinary`, and `Logger` APIs.
+It downloads binaries directly from CIRCT's GitHub releases and verifies their SHA-256 checksums.
 
 LLVM Firtool Native (`org.chipsalliance:llvm-firtool`) and FNDDS are **legacy** distribution mechanisms. The last version published to Maven Central is **1.162.0**; existing artifacts and classpath overrides continue to work.
 

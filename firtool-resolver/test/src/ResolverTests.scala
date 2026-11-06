@@ -65,7 +65,13 @@ class ResolverTests extends TemporaryDirectorySuite {
     val processes = (1 to 4).map(_ => mirror.launch())
     val outputs = processes.map(finish(_))
     assertEquals(outputs.count(_.contains(s"Downloading firtool $version for")), 1, outputs.mkString("\n"))
-    assertEquals(Files.readAllBytes(mirror.cache.resolve(s"$version/bin/firtool")).toSeq, executable.toSeq)
+    val binary = mirror.cache.resolve(s"$version/bin/firtool")
+    assertEquals(Files.readAllBytes(binary).toSeq, executable.toSeq)
+    // The payload is a shell script, so it can only be run (and version-checked) off Windows.
+    if (!windows) {
+      assert(Files.isExecutable(binary), binary)
+      outputs.foreach(output => assert(!output.contains("Unable to check downloaded firtool version"), output))
+    }
     val paths = Files.walk(mirror.cache)
     try assert(!paths.iterator().asScala.exists { path =>
       path.getFileName.toString.endsWith(".tmp") || path.getFileName.toString.startsWith("firtool-archive-")

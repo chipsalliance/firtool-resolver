@@ -17,40 +17,36 @@ private[firtoolresolver] object Archive {
       if (windows) {
         val zip = new ZipInputStream(input)
         try {
-          var entry = zip.getNextEntry()
-          while (entry != null) {
-            if (!entry.isDirectory && matches(entry.getName)) {
-              Files.copy(zip, destination, StandardCopyOption.REPLACE_EXISTING)
-              return
-            }
-            zip.closeEntry()
-            entry = zip.getNextEntry()
+          entries(zip.getNextEntry()).find(e => !e.isDirectory && matches(e.getName)) match {
+            case Some(_) => Files.copy(zip, destination, StandardCopyOption.REPLACE_EXISTING)
+            case None    => throw new IOException(s"Archive does not contain bin/$name: $archive")
           }
         } finally zip.close()
       } else {
         val gzip = new GZIPInputStream(input)
         try extractTar(gzip, matches, destination)
         finally gzip.close()
-        return
       }
-      throw new IOException(s"Archive does not contain bin/$name: $archive")
     } finally input.close()
   }
+
+  /** Lazily iterate entries until the stream returns null. */
+  private def entries[A >: Null](next: => A): Iterator[A] = Iterator.continually(next).takeWhile(_ != null)
 
   private def extractTar(input: InputStream, matches: String => Boolean, destination: Path): Unit = {
     // Commons Compress handles entry boundaries, padding, PAX, and GNU long names.
     val tar = new TarArchiveInputStream(input)
     try {
-      var entry = tar.getNextTarEntry()
-      while (entry != null) {
-        if (entry.isFile && !entry.isLink && !entry.isSymbolicLink && matches(entry.getName)) {
-          if (!tar.canReadEntryData(entry)) throw new IOException(s"Unsupported tar entry: ${entry.getName}")
-          Files.copy(tar, destination, StandardCopyOption.REPLACE_EXISTING)
-          return
-        }
-        entry = tar.getNextTarEntry()
+      val found = entries(tar.getNextTarEntry()).find { e =>
+        e.isFile && !e.isLink && !e.isSymbolicLink && matches(e.getName)
       }
-      throw new IOException("Tar archive does not contain the firtool binary")
+      found match {
+        case Some(e) =>
+          if (!tar.canReadEntryData(e)) throw new IOException(s"Unsupported tar entry: ${e.getName}")
+          Files.copy(tar, destination, StandardCopyOption.REPLACE_EXISTING)
+        case None =>
+          throw new IOException("Tar archive does not contain the firtool binary")
+      }
     } finally tar.close()
   }
 }

@@ -293,8 +293,6 @@ trait FirtoolResolver extends CrossScalaModule with ChipsAlliancePublishModule {
     def ivyDeps = Agg(
       ivy"dev.dirs:directories:26",
       ivy"io.get-coursier::coursier:2.1.8",
-      // Already bundled transitively by Coursier and shaded by org.apache.commons.
-      // Declare it directly since Archive now uses its tar reader.
       ivy"org.apache.commons:commons-compress:1.24.0",
     )
 
@@ -338,7 +336,6 @@ trait FirtoolResolver extends CrossScalaModule with ChipsAlliancePublishModule {
       )
   }
 
-  // Hermetic checks for archive extraction and the resolution flow.
   object test extends ScalaModule with TestModule.Munit {
     def scalaVersion = root.scalaVersion
     def scalacOptions = root.scalacOptions
