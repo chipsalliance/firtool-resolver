@@ -6,11 +6,12 @@ import scala.util.{Failure, Success, Try}
 import scala.collection.mutable
 import scala.io.Source
 import java.io.File
-import java.nio.file.{Path, Paths, Files, StandardCopyOption}
+import java.nio.file.{Path, Paths, Files, StandardCopyOption, StandardOpenOption}
+import java.nio.channels.FileChannel
 import java.net.URLClassLoader
 import scala.sys.process._
 
-import dev.dirs.{BaseDirectories, ProjectDirectories, UserDirectories}
+import dev.dirs.ProjectDirectories
 import coursier._
 import coursier.core.Extension
 
@@ -20,9 +21,9 @@ final case class FirtoolBinary(path: File, version: String)
   *
   * The basic algorithm is as follows
   *   - Check for firtool on the CHISEL_FIRTOOL_PATH, note any version mismatch
-  *   - Check for firtool in resources, note any version mismtach
-  *     - If found, check if already extracted, extract if not
-  *   - If none of the above found, use coursier to fetch firtool and check resources again
+  *   - Honor an explicit version override, otherwise check classpath resources
+  *   - Reuse the version's cache, or download and verify a GitHub release
+  *   - Use Coursier to fetch legacy Maven artifacts as a last resort
   */
 object Resolve {
 
@@ -63,6 +64,14 @@ object Resolve {
   private def binaryName = "firtool"
   private val VersionRegex = """^CIRCT firtool-(\S+)$""".r
 
+  private def validVersion(version: String): Boolean = version.matches("^[0-9A-Za-z.+_-]+$") &&
+    version != "." && version != ".."
+
+  private def resourceVersion(loader: ClassLoader): Option[String] = Try {
+    val source = Source.fromURL(loader.getResource(s"$groupId/$artId/project.version"))
+    try source.mkString finally source.close()
+  }.toOption
+
   private def cacheDir: String = {
     val path = sys.env.getOrElse("CHISEL_FIRTOOL_CACHE", ProjectDirectories.from("", groupId, artId).cacheDir)
     new File(path).getAbsolutePath()
@@ -73,6 +82,21 @@ object Resolve {
 
     val destDir = topDir.resolve("bin")
     destDir.resolve("firtool")
+  }
+
+  private def installBinary(logger: Logger, destination: Path)(write: Path => Unit): Unit = {
+    Files.createDirectories(destination.getParent)
+    val tmp = Files.createTempFile(destination.getParent, destination.getFileName.toString, ".tmp")
+    logger.debug(s"Created temporary file $tmp")
+    try {
+      write(tmp)
+      // Use java.io.File APIs to support Windows.
+      tmp.toFile.setWritable(true)
+      tmp.toFile.setReadable(true)
+      tmp.toFile.setExecutable(true)
+      logger.debug(s"Atomically moving $tmp to $destination")
+      Files.move(tmp, destination, StandardCopyOption.ATOMIC_MOVE)
+    } finally Files.deleteIfExists(tmp)
   }
 
   // Nested Either is weird but represents unrecoverable vs. recoverable errors
@@ -146,7 +170,7 @@ object Resolve {
 
     val baseDir = s"$groupId/$artId"
     val versionFile = resourceLoader.getResource(s"$baseDir/project.version")
-    val versionOpt = Try(Source.fromURL(versionFile).mkString).toOption
+    val versionOpt = resourceVersion(resourceLoader)
     if (versionOpt.isEmpty) {
       val msg = s"firtool version not found in resources ($versionFile)"
       logger.debug(msg)
@@ -154,6 +178,7 @@ object Resolve {
     }
 
     val version = versionOpt.get
+    if (!validVersion(version)) return Left(s"Invalid firtool version in resources: $version")
     logger.debug(s"Firtool version $version found in resources")
 
     // Try primary platform then fallback (e.g. macos-aarch64 → macos-x64) if no resource found
@@ -183,18 +208,9 @@ object Resolve {
       logger.debug(s"Copying firtool from resources to $destFile")
       val resourceBin = resourceLoader.getResourceAsStream(s"$artDir/bin/firtool")
       val result = Try {
-        val dir = destBin.getParent
-        Files.createDirectories(dir)
-        // Use temporary file for multi-thread or multi-process safety
-        val tmp = Files.createTempFile(dir, destBin.getFileName.toString, ".tmp")
-        logger.debug(s"Created temporary file $tmp")
-        Files.copy(resourceBin, tmp, StandardCopyOption.REPLACE_EXISTING)
-        // Use java.io.File APIs to support Windows
-        tmp.toFile.setWritable(true)
-        tmp.toFile.setReadable(true)
-        tmp.toFile.setExecutable(true)
-        logger.debug(s"Atomically moving $tmp to $destBin")
-        Files.move(tmp, destBin, StandardCopyOption.ATOMIC_MOVE)
+        try installBinary(logger, destBin) { tmp =>
+          Files.copy(resourceBin, tmp, StandardCopyOption.REPLACE_EXISTING)
+        } finally resourceBin.close()
       }
       if (result.isFailure) {
         val msg = s"Copying firtool failed with ${result.failed.get}"
@@ -205,15 +221,83 @@ object Resolve {
     Right(FirtoolBinary(destFile, version))
   }
 
-  private def checkInstalled(logger: Logger, defaultVersion: String): Either[String, FirtoolBinary] = {
-    val destFile: File = firtoolBin(defaultVersion).toFile
+  private def checkInstalled(logger: Logger, version: String): Either[String, FirtoolBinary] = {
+    val destFile: File = firtoolBin(version).toFile
     if (destFile.isFile) {
-      logger.debug(s"Firtool binary with default version ($defaultVersion) $destFile already exists")
-      Right(FirtoolBinary(destFile, defaultVersion))
+      logger.debug(s"Firtool binary with version ($version) $destFile already exists")
+      Right(FirtoolBinary(destFile, version))
     } else {
-      val msg = s"Firtool binary with default version ($defaultVersion) does not already exist"
+      val msg = s"Firtool binary with version ($version) does not already exist"
       logger.debug(msg)
       Left(msg)
+    }
+  }
+
+  /** Run body while holding the per-version cache lock, both within this JVM and across processes. */
+  private def withVersionLock[A](logger: Logger, version: String)(body: => A): A = this.synchronized {
+    val cache = Paths.get(cacheDir)
+    Files.createDirectories(cache)
+    val lockPath = cache.resolve(s"$version.lock")
+    logger.debug(s"Acquiring firtool cache lock $lockPath")
+    val channel = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE)
+    try {
+      val lock = channel.lock()
+      try body
+      finally lock.release()
+    } finally channel.close()
+  }
+
+  /** Find the release asset for the primary platform, or else for its fallback platform. */
+  private def findRelease(logger: Logger, version: String, primary: String): Either[String, GitHub.Release] =
+    GitHub.lookup(logger, version, primary) match {
+      case Some(release) => Right(release)
+      case None =>
+        val fallback = fallbackPlatform(primary)
+        fallback.flatMap(GitHub.lookup(logger, version, _)) match {
+          case Some(release) =>
+            logger.warn(s"Falling back to platform ${release.platform} (no $primary release asset for firtool $version)")
+            Right(release)
+          case None =>
+            val platforms = (primary +: fallback.toSeq).mkString(" or ")
+            Left(s"No GitHub release asset for firtool $version on $platforms")
+        }
+    }
+
+  private def warnIfVersionDiffers(logger: Logger, binary: Path, version: String): Unit = {
+    val output = mutable.ArrayBuffer.empty[String]
+    val command = Seq(binary.toString, "--version")
+    logger.debug(s"Running: ${command.mkString(" ")}")
+    Try(command.!(ProcessLogger(output += _))) match {
+      case Success(0) =>
+        output.collectFirst { case VersionRegex(v) => v }.filter(_ != version).foreach { actual =>
+          logger.warn(s"Downloaded firtool version $actual differs from requested version $version")
+        }
+      case result => logger.warn(s"Unable to check downloaded firtool version: $result ${output.mkString("\n")}")
+    }
+  }
+
+  private def fetchFromGitHub(logger: Logger, version: String): Either[String, FirtoolBinary] = {
+    logger.debug(s"Attempting to fetch firtool $version from GitHub releases")
+    val result = Try {
+      for {
+        primary <- determinePlatform(logger)
+        binary <- withVersionLock(logger, version) {
+          // Another process may have installed this version while we waited for the lock.
+          checkInstalled(logger, version).left.flatMap { _ =>
+            findRelease(logger, version, primary).map { release =>
+              val destination = firtoolBin(version)
+              installBinary(logger, destination)(GitHub.extract(logger, release, _))
+              warnIfVersionDiffers(logger, destination, version)
+              FirtoolBinary(destination.toFile, version)
+            }
+          }
+        }
+      } yield binary
+    }
+    result.toEither.left.map(_.toString).flatMap(identity).left.map { error =>
+      val msg = s"Fetching firtool $version from GitHub failed: $error"
+      logger.debug(msg)
+      msg
     }
   }
 
@@ -253,8 +337,10 @@ object Resolve {
       logger.debug(s"Successfully fetched $jar")
 
       logger.debug(s"Loading $jar to search its resources")
-      val classloader = new URLClassLoader(Array(jar.toURI.toURL))
-      checkResources(Some(classloader), logger)
+      // A version override must not be shadowed by resources in the parent classloader.
+      val classloader = new URLClassLoader(Array(jar.toURI.toURL), null)
+      try checkResources(Some(classloader), logger)
+      finally classloader.close()
     }
 
     tryFetch(platform) match {
@@ -281,18 +367,35 @@ object Resolve {
   }
 
   def apply(logger: Logger, defaultVersion: String): Either[String, FirtoolBinary] = {
-    for {
-      // checkFirtoolPath has both recoverable and unrecoverable errors
-      // First <- does not have .left projection so that unrecoverable errors short-circuit
-      res <- checkFirtoolPath(logger)
-      // Left projections allow us to short-circuit on any Right, and otherwise aggregate errors
-      // returned in Left
-      msg1 <- res.left
-      msg2 <- checkResources(None, logger).left
-      msg3 <- checkInstalled(logger, defaultVersion).left
-      msg4 <- fetchArtifact(logger, defaultVersion).left
-    } yield {
-      List("Failed to fetch firtool:", msg1, msg2, msg3, msg4).mkString("\n")
+    checkFirtoolPath(logger).flatMap {
+      case Right(binary) => Right(binary)
+      case Left(pathError) =>
+        val overrideVersion = sys.props.get("chisel.firtool.version").orElse(sys.env.get("CHISEL_FIRTOOL_VERSION"))
+        val version = overrideVersion.getOrElse(defaultVersion)
+        val resources = overrideVersion match {
+          case Some(v) =>
+            logger.debug(s"Using explicit firtool version override: $v")
+            resourceVersion(this.getClass.getClassLoader).foreach { classpathVersion =>
+              logger.warn(s"Firtool version override $v takes precedence over llvm-firtool $classpathVersion on the classpath")
+            }
+            Left("Classpath lookup skipped because an explicit firtool version is set")
+          case None => checkResources(None, logger).map { binary =>
+            logger.info(s"using llvm-firtool ${binary.version} from classpath; this mechanism is deprecated, set chisel.firtool.version instead")
+            binary
+          }
+        }
+        resources match {
+          case Right(binary) => Right(binary)
+          case Left(resourceError) if !validVersion(version) =>
+            Left(List("Failed to fetch firtool:", pathError, resourceError, s"Invalid firtool version: $version").mkString("\n"))
+          case Left(resourceError) =>
+            // Left projections short-circuit on success and aggregate all failed steps.
+            for {
+              cacheError <- checkInstalled(logger, version).left
+              githubError <- fetchFromGitHub(logger, version).left
+              mavenError <- fetchArtifact(logger, version).left
+            } yield List("Failed to fetch firtool:", pathError, resourceError, cacheError, githubError, mavenError).mkString("\n")
+        }
     }
   }
 }

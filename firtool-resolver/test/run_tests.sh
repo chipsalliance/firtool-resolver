@@ -1,25 +1,43 @@
 #!/usr/bin/env bash
 
-set -ex
+set -euxo pipefail
 
 THIS_DIR=$(cd "$(dirname "$0")"; pwd -P)
 
 OS=$1
 export SCALA_VERSION=$2
 
-export COURSIER_CACHE="$PWD/coursier_cache"
-rm -rf $COURSIER_CACHE
-export FIRTOOL_RESOLVER_VERSION=$(./mill show firtool-resolver[$SCALA_VERSION].publishVersion | xargs)
-export LLVM_FIRTOOL_VERSION=$(./mill show llvm-firtool.publishVersion | xargs)
-# If there's a -SNAPSHOT in LLVM_FIRTOOL_VERSION, strip it
-export FIRTOOL_VERSION=${LLVM_FIRTOOL_VERSION%-SNAPSHOT}
+# Isolate each run, including downloads, from the user's existing caches and settings.
+TEST_DIR=$(mktemp -d)
+if [[ "$OS" == windows ]]; then
+  TEST_DIR=$(cygpath -m "$TEST_DIR")
+fi
+trap 'rm -rf "$TEST_DIR"' EXIT
+unset CHISEL_FIRTOOL_PATH CHISEL_FIRTOOL_VERSION CHISEL_FIRTOOL_URL
+export COURSIER_CACHE="$TEST_DIR/coursier"
+export CHISEL_FIRTOOL_CACHE="$TEST_DIR/firtool"
+# Mill records dependency paths in its build cache. Keep its dependencies in
+# the persistent default cache while isolating the resolver's network fetches.
+mill_run() { env -u COURSIER_CACHE ./mill -i "$@"; }
+FIRTOOL_RESOLVER_VERSION=$(mill_run show firtool-resolver[$SCALA_VERSION].publishVersion | xargs)
+LLVM_FIRTOOL_ARTIFACT_VERSION=$(mill_run show llvm-firtool.publishVersion | xargs)
+export FIRTOOL_RESOLVER_VERSION
+# GitHub releases use the unsuffixed version.
+export FIRTOOL_VERSION=${LLVM_FIRTOOL_ARTIFACT_VERSION%-SNAPSHOT}
 
-$THIS_DIR/negative.sh 2>&1 | FileCheck $THIS_DIR/negative.sh
+# Expected failures are checked by FileCheck, rather than by the pipeline status.
+{ bash "$THIS_DIR/negative.sh" 2>&1 || true; } | FileCheck "$THIS_DIR/negative.sh"
 
-# TODO remove this line, use maven central published versions
-./mill llvm-firtool.publishLocal
+# Retain local publication for the legacy classpath tests. The Coursier fallback
+# uses the unsuffixed release version, which is already on Maven Central.
+mill_run llvm-firtool.publishLocal
 
-./mill firtool-resolver[$SCALA_VERSION].publishLocal
+mill_run firtool-resolver[$SCALA_VERSION].publishLocal
+
+mill_run firtool-resolver[$SCALA_VERSION].test
+
+# The build needs the unsuffixed version; legacy launches need the published one.
+export LLVM_FIRTOOL_VERSION=$LLVM_FIRTOOL_ARTIFACT_VERSION
 
 # Sanity check: the firtool-resolver jar must not bundle scala-library or other scala jars
 RESOLVER_JAR="out/firtool-resolver/$SCALA_VERSION/jar.dest/out.jar"
@@ -38,20 +56,27 @@ if ! jar tf "$RESOLVER_JAR" | grep -q "^firtoolresolver/"; then
   exit 1
 fi
 
-$THIS_DIR/on_classpath.sh 2>&1 | FileCheck -DLLVM_FIRTOOL_VERSION="$LLVM_FIRTOOL_VERSION" -DFIRTOOL_VERSION="$FIRTOOL_VERSION" $THIS_DIR/on_classpath.sh
+bash "$THIS_DIR/on_classpath.sh" 2>&1 | FileCheck -DLLVM_FIRTOOL_VERSION="$LLVM_FIRTOOL_VERSION" -DFIRTOOL_VERSION="$FIRTOOL_VERSION" "$THIS_DIR/on_classpath.sh"
 
-$THIS_DIR/installed.sh 2>&1 | FileCheck -DLLVM_FIRTOOL_VERSION="$LLVM_FIRTOOL_VERSION" -DFIRTOOL_VERSION="$FIRTOOL_VERSION" $THIS_DIR/installed.sh
+bash "$THIS_DIR/installed.sh" 2>&1 | FileCheck -DLLVM_FIRTOOL_VERSION="$LLVM_FIRTOOL_VERSION" -DFIRTOOL_VERSION="$FIRTOOL_VERSION" "$THIS_DIR/installed.sh"
 
-$THIS_DIR/fetched.sh 2>&1 | FileCheck -DLLVM_FIRTOOL_VERSION="$LLVM_FIRTOOL_VERSION" -DFIRTOOL_VERSION="$FIRTOOL_VERSION" $THIS_DIR/fetched.sh
+bash "$THIS_DIR/github.sh" 2>&1 | FileCheck -DFIRTOOL_VERSION="$FIRTOOL_VERSION" "$THIS_DIR/github.sh"
 
-$THIS_DIR/firtool_path.sh 2>&1 | FileCheck -DLLVM_FIRTOOL_VERSION="$LLVM_FIRTOOL_VERSION" -DFIRTOOL_VERSION="$FIRTOOL_VERSION" $THIS_DIR/firtool_path.sh
+bash "$THIS_DIR/version_override.sh" 2>&1 | FileCheck -DLLVM_FIRTOOL_VERSION="$LLVM_FIRTOOL_VERSION" -DFIRTOOL_VERSION="$FIRTOOL_VERSION" "$THIS_DIR/version_override.sh"
 
-cache="$PWD/firtool_cache"
+if [[ "$OS" == macos && $(uname -m) == arm64 ]]; then
+  bash "$THIS_DIR/platform_fallback.sh" 2>&1 | FileCheck "$THIS_DIR/platform_fallback.sh"
+fi
+
+CHISEL_FIRTOOL_CACHE="$TEST_DIR/coursier-fallback" bash "$THIS_DIR/coursier_fallback.sh" 2>&1 | FileCheck -DFIRTOOL_VERSION="$FIRTOOL_VERSION" "$THIS_DIR/coursier_fallback.sh"
+
+{ bash "$THIS_DIR/firtool_path.sh" 2>&1 || true; } | FileCheck -DLLVM_FIRTOOL_VERSION="$LLVM_FIRTOOL_VERSION" -DFIRTOOL_VERSION="$FIRTOOL_VERSION" "$THIS_DIR/firtool_path.sh"
+
+cache="$TEST_DIR/firtool_cache"
 if [[ "$OS" == "windows" ]]; then
   # The windows path separator causes problems, just use local path on Windows
   filecheck_cache=$(basename $cache)
 else
   filecheck_cache=$cache
 fi
-rm -rf $cache
-CHISEL_FIRTOOL_CACHE=$cache $THIS_DIR/firtool_cache.sh 2>&1 | FileCheck -DLLVM_FIRTOOL_VERSION="$LLVM_FIRTOOL_VERSION" -DFIRTOOL_VERSION="$FIRTOOL_VERSION" -DCHISEL_FIRTOOL_CACHE="$filecheck_cache" $THIS_DIR/firtool_cache.sh
+CHISEL_FIRTOOL_CACHE="$cache" bash "$THIS_DIR/firtool_cache.sh" 2>&1 | FileCheck -DLLVM_FIRTOOL_VERSION="$LLVM_FIRTOOL_VERSION" -DFIRTOOL_VERSION="$FIRTOOL_VERSION" -DCHISEL_FIRTOOL_CACHE="$filecheck_cache" "$THIS_DIR/firtool_cache.sh"
