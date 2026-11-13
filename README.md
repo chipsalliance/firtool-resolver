@@ -41,7 +41,7 @@ cs launch --scala 2.13 org.chipsalliance::firtool-resolver:2.2.0 \
 | Release base URL / mirror | `chisel.firtool.url` | `CHISEL_FIRTOOL_URL` | `https://github.com/llvm/circt/releases/download` |
 | Cache directory | — | `CHISEL_FIRTOOL_CACHE` | OS-specific project cache directory |
 
-Properties take precedence over the corresponding environment variables. Version strings must contain only ASCII letters, digits, `.`, `+`, `_`, or `-`, and cannot be `.` or `..`.
+Properties take precedence over the corresponding environment variables.
 
 Direct downloads require access to **github.com** and **release-assets.githubusercontent.com**. Standard JVM proxy properties (`https.proxyHost`, `https.proxyPort`, and the corresponding HTTP properties for HTTP mirrors) are honored.
 
@@ -60,8 +60,6 @@ To use an internal HTTP server, an Artifactory generic remote, or a local `file:
 | `windows-x64` | `firrtl-bin-windows-x64.zip` |
 
 GitHub fetching supports versions starting at **1.45.0**. Native macOS arm64 assets start at **1.144.0**; earlier versions fall back to macOS x64 through Rosetta. Older releases remain available through the legacy Maven path.
-
-Checksum files may contain just the hex digest or a digest followed by a filename. Checksums detect corrupt downloads and broken mirrors; because they come from the same origin as the archive, they do not authenticate a compromised release. A downloaded binary reporting a different version logs a warning.
 
 ### Development and release
 

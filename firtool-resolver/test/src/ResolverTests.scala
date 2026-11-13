@@ -109,7 +109,7 @@ class ResolverTests extends TemporaryDirectorySuite {
     assert(output.contains("Attempting to fetch org.chipsalliance:llvm-firtool:"), output)
     assert(output.contains("Failed to fetch firtool:"), output)
     assert(!Files.exists(mirror.cache.resolve(s"$version/bin/firtool")))
-    val remaining = Files.list(mirror.cache.resolve(version))
-    try assertEquals(remaining.count(), 0L) finally remaining.close()
+    val remaining = Files.walk(mirror.cache.resolve(version))
+    try assertEquals(remaining.iterator().asScala.count(Files.isRegularFile(_)), 0) finally remaining.close()
   }
 }

@@ -286,12 +286,7 @@ object Resolve {
           checkInstalled(logger, version).left.flatMap { _ =>
             findRelease(logger, version, primary).map { release =>
               val destination = firtoolBin(version)
-              val directory = Files.createDirectories(destination.getParent.getParent)
-              val archive = GitHub.download(logger, release, directory)
-              try {
-                logger.debug(s"Extracting firtool from $archive")
-                installBinary(logger, destination)(Archive.extract(archive, release.windows, _))
-              } finally Files.deleteIfExists(archive)
+              installBinary(logger, destination)(GitHub.extract(logger, release, _))
               warnIfVersionDiffers(logger, destination, version)
               FirtoolBinary(destination.toFile, version)
             }
