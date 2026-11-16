@@ -19,8 +19,8 @@ cs launch --scala $SCALA_VERSION \
 # CHECK: Acquiring firtool cache lock
 # CHECK: Downloading SHA-256 checksum
 # CHECK: Downloading firtool [[FIRTOOL_VERSION]] for
-# CHECK: Verified SHA-256 checksum:
 # CHECK: Extracting firtool from
+# CHECK: Verified SHA-256 checksum:
 # CHECK: Atomically moving
 # CHECK-NOT: Attempting to fetch org.chipsalliance:llvm-firtool:
 "$FIRTOOL" --version
