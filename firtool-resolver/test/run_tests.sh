@@ -20,24 +20,18 @@ export CHISEL_FIRTOOL_CACHE="$TEST_DIR/firtool"
 # the persistent default cache while isolating the resolver's network fetches.
 mill_run() { env -u COURSIER_CACHE ./mill -i "$@"; }
 FIRTOOL_RESOLVER_VERSION=$(mill_run show firtool-resolver[$SCALA_VERSION].publishVersion | xargs)
-LLVM_FIRTOOL_ARTIFACT_VERSION=$(mill_run show llvm-firtool.publishVersion | xargs)
 export FIRTOOL_RESOLVER_VERSION
-# GitHub releases use the unsuffixed version.
-export FIRTOOL_VERSION=${LLVM_FIRTOOL_ARTIFACT_VERSION%-SNAPSHOT}
+# llvm-firtool is no longer published, so use a version already on Maven Central.
+# It is also available as a GitHub release.
+export FIRTOOL_VERSION=1.162.0
+export LLVM_FIRTOOL_VERSION=$FIRTOOL_VERSION
 
 # Expected failures are checked by FileCheck, rather than by the pipeline status.
 { bash "$THIS_DIR/negative.sh" 2>&1 || true; } | FileCheck "$THIS_DIR/negative.sh"
 
-# Retain local publication for the legacy classpath tests. The Coursier fallback
-# uses the unsuffixed release version, which is already on Maven Central.
-mill_run llvm-firtool.publishLocal
-
 mill_run firtool-resolver[$SCALA_VERSION].publishLocal
 
 mill_run firtool-resolver[$SCALA_VERSION].test
-
-# The build needs the unsuffixed version; legacy launches need the published one.
-export LLVM_FIRTOOL_VERSION=$LLVM_FIRTOOL_ARTIFACT_VERSION
 
 # Sanity check: the firtool-resolver jar must not bundle scala-library or other scala jars
 RESOLVER_JAR="out/firtool-resolver/$SCALA_VERSION/jar.dest/out.jar"

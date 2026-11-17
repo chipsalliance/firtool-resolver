@@ -12,9 +12,6 @@ jobs:
   ci:
     name: Run Tests
     uses: ./.github/workflows/test.yml
-    with:
-      version: '1.144.0'
-      snapshot: 'true'
 
   publish:
     name: Publish Firtool Resolver
