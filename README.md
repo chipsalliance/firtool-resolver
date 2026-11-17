@@ -25,7 +25,7 @@ cs launch --scala 2.13 org.chipsalliance::firtool-resolver:2.2.0 \
 
 ### Resolution order
 
-1. Run `firtool` from the directory specified by `CHISEL_FIRTOOL_PATH`. An invalid path or a binary that cannot run is an unrecoverable error, as before.
+1. Run `firtool` from the directory specified by system property `chisel.firtool.path` or environment variable `CHISEL_FIRTOOL_PATH`. An invalid path or a binary that cannot run is an unrecoverable error, as before.
 2. Choose the effective version: system property `chisel.firtool.version`, then environment variable `CHISEL_FIRTOOL_VERSION`, then the caller's default version. An explicit override skips the classpath lookup and warns if `llvm-firtool` is also on the classpath.
 3. If no explicit version is set, honor `llvm-firtool` on the classpath. This legacy mechanism logs a deprecation message at info level.
 4. Reuse the cached binary at `<cache>/<effective-version>/bin/firtool`.
@@ -36,10 +36,10 @@ cs launch --scala 2.13 org.chipsalliance::firtool-resolver:2.2.0 \
 
 | Setting | System property | Environment variable | Default |
 |---|---|---|---|
-| Executable directory | — | `CHISEL_FIRTOOL_PATH` | Unset |
+| Executable directory | `chisel.firtool.path` | `CHISEL_FIRTOOL_PATH` | Unset |
 | Version override | `chisel.firtool.version` | `CHISEL_FIRTOOL_VERSION` | Caller's default version |
 | Release base URL / mirror | `chisel.firtool.url` | `CHISEL_FIRTOOL_URL` | `https://github.com/llvm/circt/releases/download` |
-| Cache directory | — | `CHISEL_FIRTOOL_CACHE` | OS-specific project cache directory |
+| Cache directory | `chisel.firtool.cache` | `CHISEL_FIRTOOL_CACHE` | OS-specific project cache directory |
 
 Properties take precedence over the corresponding environment variables.
 
