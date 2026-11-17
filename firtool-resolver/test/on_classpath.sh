@@ -9,8 +9,8 @@ cs launch --scala $SCALA_VERSION \
   -v \
   $LLVM_FIRTOOL_VERSION
 )
-# CHECK: Checking CHISEL_FIRTOOL_PATH for firtool
-# CHECK: CHISEL_FIRTOOL_PATH not set
+# CHECK: Checking chisel.firtool.path and CHISEL_FIRTOOL_PATH for firtool
+# CHECK: chisel.firtool.path and CHISEL_FIRTOOL_PATH not set
 # CHECK: Checking resources for firtool
 # CHECK: Firtool version [[LLVM_FIRTOOL_VERSION]] found in resources
 # CHECK: using llvm-firtool [[LLVM_FIRTOOL_VERSION]] from classpath; this mechanism is deprecated, set chisel.firtool.version instead

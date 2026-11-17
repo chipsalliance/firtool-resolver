@@ -10,8 +10,8 @@ cs launch --scala $SCALA_VERSION \
   -v \
    $FIRTOOL_VERSION
 )
-# CHECK: Checking CHISEL_FIRTOOL_PATH for firtool
-# CHECK: CHISEL_FIRTOOL_PATH not set
+# CHECK: Checking chisel.firtool.path and CHISEL_FIRTOOL_PATH for firtool
+# CHECK: chisel.firtool.path and CHISEL_FIRTOOL_PATH not set
 # CHECK: Checking resources for firtool
 # CHECK: firtool version not found in resources
 # CHECK: Firtool binary with version ([[FIRTOOL_VERSION]]) does not already exist

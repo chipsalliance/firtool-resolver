@@ -30,16 +30,19 @@ class ResolverTests extends TemporaryDirectorySuite {
     write(checksum, bytes(s"${digest(archive)}  $asset\n"))
 
     def launch(extraClasspath: Option[Path] = None, envVersion: String = version,
-               envURL: String = base.toUri.toString): Process = {
+               envURL: String = base.toUri.toString, javaOpts: Seq[String] = Nil,
+               envCache: Option[String] = Some(cache.toString), envPath: Option[String] = None): Process = {
       val classpath = System.getProperty("firtoolresolver.test.classpath")
       val cp = extraClasspath.map(p => s"$p${java.io.File.pathSeparator}$classpath").getOrElse(classpath)
       val javaCommand = Paths.get(System.getProperty("java.home"), "bin", "java").toString
-      val command = Seq(javaCommand, "-cp", cp, "firtoolresolver.Main", "-v", "0.0.0")
+      val command = Seq(javaCommand) ++ javaOpts ++ Seq("-cp", cp, "firtoolresolver.Main", "-v", "0.0.0")
       val builder = new ProcessBuilder(command: _*).redirectErrorStream(true)
       val env = builder.environment()
       env.remove("CHISEL_FIRTOOL_PATH")
+      envPath.foreach(env.put("CHISEL_FIRTOOL_PATH", _))
       env.put("CHISEL_FIRTOOL_VERSION", envVersion)
-      env.put("CHISEL_FIRTOOL_CACHE", cache.toString)
+      env.remove("CHISEL_FIRTOOL_CACHE")
+      envCache.foreach(env.put("CHISEL_FIRTOOL_CACHE", _))
       env.put("CHISEL_FIRTOOL_URL", envURL)
       env.put("COURSIER_CACHE", root.resolve("coursier").toString)
       env.put("COURSIER_REPOSITORIES", root.resolve("maven").toUri.toString)
@@ -111,5 +114,40 @@ class ResolverTests extends TemporaryDirectorySuite {
     assert(!Files.exists(mirror.cache.resolve(s"$version/bin/firtool")))
     val remaining = Files.walk(mirror.cache.resolve(version))
     try assertEquals(remaining.iterator().asScala.count(Files.isRegularFile(_)), 0) finally remaining.close()
+  }
+
+  directory.test("chisel.firtool.cache property takes precedence over CHISEL_FIRTOOL_CACHE") { root =>
+    val mirror = new Mirror(root)
+    val propCache = root.resolve("prop-cache")
+    val envCache = root.resolve("env-cache")
+    finish(mirror.launch(javaOpts = Seq(s"-Dchisel.firtool.cache=$propCache"), envCache = Some(envCache.toString)))
+    assert(Files.exists(propCache.resolve(s"$version/bin/firtool")))
+    assert(!Files.exists(envCache))
+  }
+
+  directory.test("chisel.firtool.cache property works without CHISEL_FIRTOOL_CACHE") { root =>
+    val mirror = new Mirror(root)
+    val propCache = root.resolve("prop-cache")
+    finish(mirror.launch(javaOpts = Seq(s"-Dchisel.firtool.cache=$propCache"), envCache = None))
+    assert(Files.exists(propCache.resolve(s"$version/bin/firtool")))
+  }
+
+  directory.test("chisel.firtool.path property takes precedence over CHISEL_FIRTOOL_PATH") { root =>
+    val mirror = new Mirror(root)
+    val propPath = root.resolve("missing-prop-path")
+    val envPath = root.resolve("missing-env-path")
+    val output = finish(
+      mirror.launch(javaOpts = Seq(s"-Dchisel.firtool.path=$propPath"), envPath = Some(envPath.toString)), 1)
+    assert(output.contains(s"chisel.firtool.path (${propPath.toAbsolutePath}) does not exist"), output)
+    assert(!output.contains("Attempting to fetch"), output)
+    assert(!Files.exists(mirror.cache))
+  }
+
+  directory.test("CHISEL_FIRTOOL_PATH is reported when the property is unset") { root =>
+    val mirror = new Mirror(root)
+    val envPath = root.resolve("missing-env-path")
+    val output = finish(mirror.launch(envPath = Some(envPath.toString)), 1)
+    assert(output.contains(s"CHISEL_FIRTOOL_PATH (${envPath.toAbsolutePath}) does not exist"), output)
+    assert(!Files.exists(mirror.cache))
   }
 }

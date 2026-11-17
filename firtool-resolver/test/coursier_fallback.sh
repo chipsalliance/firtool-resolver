@@ -8,8 +8,8 @@ COURSIER_REPOSITORIES=central CHISEL_FIRTOOL_URL=file:///nonexistent cs launch -
   org.chipsalliance::firtool-resolver:$FIRTOOL_RESOLVER_VERSION \
   --main firtoolresolver.Main -- -v "$FIRTOOL_VERSION"
 )
-# CHECK: Checking CHISEL_FIRTOOL_PATH for firtool
-# CHECK: CHISEL_FIRTOOL_PATH not set
+# CHECK: Checking chisel.firtool.path and CHISEL_FIRTOOL_PATH for firtool
+# CHECK: chisel.firtool.path and CHISEL_FIRTOOL_PATH not set
 # CHECK: Checking resources for firtool
 # CHECK: firtool version not found in resources
 # CHECK: Firtool binary with version ([[FIRTOOL_VERSION]]) does not already exist

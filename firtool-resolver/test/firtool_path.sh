@@ -19,9 +19,9 @@ cs launch --scala $SCALA_VERSION \
   -v \
   $LLVM_FIRTOOL_VERSION
 )
-# CHECK: Checking CHISEL_FIRTOOL_PATH for firtool
+# CHECK: Checking chisel.firtool.path and CHISEL_FIRTOOL_PATH for firtool
 # CHECK: Running: {{.+}}bin{{.}}firtool --version
-# CHECK-NOT: CHISEL_FIRTOOL_PATH not set
+# CHECK-NOT: chisel.firtool.path and CHISEL_FIRTOOL_PATH not set
 # CHECK-NOT: Checking resources for firtool
 $FIRTOOL --version
 # CHECK: CIRCT firtool-[[FIRTOOL_VERSION]]
@@ -36,8 +36,8 @@ cs launch --scala $SCALA_VERSION \
   -- \
   -v \
   $LLVM_FIRTOOL_VERSION
-# CHECK: Checking CHISEL_FIRTOOL_PATH for firtool
+# CHECK: Checking chisel.firtool.path and CHISEL_FIRTOOL_PATH for firtool
 # CHECK: Running: {{.+}}bin{{.}}firtool --version
 # CHECK: Cannot run program {{.+}}firtool
-# CHECK-NOT: CHISEL_FIRTOOL_PATH not set
+# CHECK-NOT: chisel.firtool.path and CHISEL_FIRTOOL_PATH not set
 # CHECK-NOT: Checking resources for firtool

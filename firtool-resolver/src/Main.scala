@@ -73,7 +73,9 @@ object Resolve {
   }.toOption
 
   private def cacheDir: String = {
-    val path = sys.env.getOrElse("CHISEL_FIRTOOL_CACHE", ProjectDirectories.from("", groupId, artId).cacheDir)
+    val path = sys.props.get("chisel.firtool.cache")
+      .orElse(sys.env.get("CHISEL_FIRTOOL_CACHE"))
+      .getOrElse(ProjectDirectories.from("", groupId, artId).cacheDir)
     new File(path).getAbsolutePath()
   }
 
@@ -107,19 +109,22 @@ object Resolve {
     def Recoverable(msg: String): Either[String, Either[String, FirtoolBinary]] = Right(Left(msg))
     def Unrecoverable(msg: String): Either[String, Either[String, FirtoolBinary]] = Left(msg)
 
-    logger.debug("Checking CHISEL_FIRTOOL_PATH for firtool")
+    logger.debug("Checking chisel.firtool.path and CHISEL_FIRTOOL_PATH for firtool")
 
     // TODO make this function more consistent between return and matching
-    val firtoolPathOpt = sys.env.get("CHISEL_FIRTOOL_PATH")
+    val propPath = sys.props.get("chisel.firtool.path").map("chisel.firtool.path" -> _)
+    val envPath = sys.env.get("CHISEL_FIRTOOL_PATH").map("CHISEL_FIRTOOL_PATH" -> _)
+    val firtoolPathOpt = propPath.orElse(envPath)
     if (firtoolPathOpt.isEmpty) {
-      val msg = "CHISEL_FIRTOOL_PATH not set"
+      val msg = "chisel.firtool.path and CHISEL_FIRTOOL_PATH not set"
       logger.debug(msg)
       return Recoverable(msg)
     }
 
-    val firtoolPath = Paths.get(firtoolPathOpt.get).toAbsolutePath
+    val (pathSource, pathValue) = firtoolPathOpt.get
+    val firtoolPath = Paths.get(pathValue).toAbsolutePath
     if (!Files.exists(firtoolPath)) {
-      val msg = s"CHISEL_FIRTOOL_PATH ($firtoolPath) does not exist"
+      val msg = s"$pathSource ($firtoolPath) does not exist"
       logger.debug(msg)
       return Unrecoverable(msg)
     }
