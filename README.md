@@ -63,9 +63,11 @@ GitHub fetching supports versions starting at **1.45.0**. Native macOS arm64 ass
 
 ### Development and release
 
-Run `./mill -i 'firtool-resolver[_].test'` for the hermetic MUnit resolver tests on both Scala versions, or `./mill -i 'firtool-resolver[2.13].test'` for just Scala 2.13.
+Run `./mill -i 'firtool-resolver[_].test'` for the tests on both Scala versions, or `./mill -i 'firtool-resolver[2.13].test'` for just Scala 2.13.
 
-The FileCheck integration suite is `./firtool-resolver/test/run_tests.sh <linux|macos|windows> <2.12|2.13>`; it requires Coursier, FileCheck, and network access.
+The tests are MUnit tests that run the resolver in real JVMs against local fixtures (a fake release mirror, a fake Maven repository, and local HTTP servers), once from the unshaded classes and once from the shaded jar as published. They also check the contents of the published jar.
+
+`LiveTests` additionally exercise the real GitHub releases, Maven Central, and real firtool binaries. They need network access and are skipped unless `FIRTOOL_RESOLVER_LIVE_TESTS` is set, e.g. `FIRTOOL_RESOLVER_LIVE_TESTS=1 ./mill -i 'firtool-resolver[2.13].test'`.
 
 # Firtool Native Dependency Distribution Specification (FNDDS) (legacy)
 

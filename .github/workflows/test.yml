@@ -10,46 +10,21 @@ jobs:
       matrix:
         scala-version: ["2.13", "2.12"]
         runner: ["ubuntu-24.04", "macos-15", "windows-2025"]
-        include:
-          - runner: ubuntu-24.04
-            os: linux
-            arch: x64
-            ext: ""
-          - runner: macos-15
-            os: macos
-            arch: x64 # Technically it's x64 but we rely on Rosetta for the time being.
-            ext: ""
-          - runner: windows-2025
-            os: windows
-            arch: x64
-            ext: ".exe"
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-      - name: Install wget (Windows)
-        if: matrix.os == 'windows'
-        run: choco install wget
-      - name: Install FileCheck
-        shell: bash
-        run: |
-          mkdir bin
-          cd bin
-          BIN=FileCheck-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}
-          wget https://github.com/jackkoenig/FileCheck/releases/download/FileCheck-16.0.6/$BIN
-          mv $BIN FileCheck
-          chmod +x FileCheck
-          echo "$(pwd)" >> $GITHUB_PATH
-          ./FileCheck --version
-          cd ..
       - name: Install Scala and Coursier
         uses: coursier/setup-action@v2
         with:
           jvm: temurin:17
       - name: Run Test
         shell: bash
+        env:
+          # Also run the tests that need network access (real GitHub releases, Maven Central, real firtool)
+          FIRTOOL_RESOLVER_LIVE_TESTS: "1"
         run: |
           # First run of mill is important to set itself up
           ./mill resolve _
-          ./firtool-resolver/test/run_tests.sh ${{ matrix.os }} ${{ matrix.scala-version }}
+          ./mill -i 'firtool-resolver[${{ matrix.scala-version }}].test'
 
