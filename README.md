@@ -67,7 +67,15 @@ Run `./mill -i 'firtool-resolver[_].test'` for the tests on both Scala versions,
 
 The tests are MUnit tests that run the resolver in real JVMs against local fixtures (a fake release mirror, a fake Maven repository, and local HTTP servers), once from the unshaded classes and once from the shaded jar as published. They also check the contents of the published jar.
 
-`LiveTests` additionally exercise the real GitHub releases, Maven Central, and real firtool binaries. They need network access and are skipped unless `FIRTOOL_RESOLVER_LIVE_TESTS` is set, e.g. `FIRTOOL_RESOLVER_LIVE_TESTS=1 ./mill -i 'firtool-resolver[2.13].test'`.
+`LiveTests` additionally exercise the real GitHub releases, Maven Central, and real firtool binaries. They need network access, are tagged `live`, and run by default. Use MUnit's tag filters to select which tests to run:
+
+```bash
+# Hermetic tests only
+./mill -i 'firtool-resolver[2.13].test' --exclude-tags=live
+
+# Live tests only
+./mill -i 'firtool-resolver[2.13].test' --include-tags=live
+```
 
 # Firtool Native Dependency Distribution Specification (FNDDS) (legacy)
 

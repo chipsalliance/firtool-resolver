@@ -9,18 +9,17 @@ import Check._
 
 /** Tests of what hermetic fixtures cannot prove: the real GitHub releases, Maven Central, and real firtool binaries.
   *
-  * These are skipped unless FIRTOOL_RESOLVER_LIVE_TESTS is set, since they need network access (and download
-  * a few hundred MB). They run the resolver as published, i.e. from the shaded classpath.
+  * These are tagged "live" and need network access (and download a few hundred MB).
+  * They run the resolver as published, i.e. from the shaded classpath.
   *
   * llvm-firtool is no longer published, so use a version already on Maven Central that is also a GitHub release.
   */
 class LiveTests extends TemporaryDirectorySuite with LogAssertions {
   private val firtoolVersion = "1.162.0"
-  private def enabled = sys.env.contains("FIRTOOL_RESOLVER_LIVE_TESTS")
+  private val Live = new munit.Tag("live")
 
   private def live(name: String)(body: Sandbox => Unit): Unit =
-    directory.test(name) { root =>
-      assume(enabled, "set FIRTOOL_RESOLVER_LIVE_TESTS to run tests that need network access")
+    directory.test(name.tag(Live)) { root =>
       body(new Sandbox(root, "firtoolresolver.test.shaded.classpath"))
     }
 

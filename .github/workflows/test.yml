@@ -20,11 +20,7 @@ jobs:
           jvm: temurin:17
       - name: Run Test
         shell: bash
-        env:
-          # Also run the tests that need network access (real GitHub releases, Maven Central, real firtool)
-          FIRTOOL_RESOLVER_LIVE_TESTS: "1"
         run: |
           # First run of mill is important to set itself up
           ./mill resolve _
           ./mill -i 'firtool-resolver[${{ matrix.scala-version }}].test'
-
