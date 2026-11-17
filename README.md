@@ -45,7 +45,7 @@ Properties take precedence over the corresponding environment variables.
 
 Direct downloads require access to **github.com** and **release-assets.githubusercontent.com**. Standard JVM proxy properties (`https.proxyHost`, `https.proxyPort`, and the corresponding HTTP properties for HTTP mirrors) are honored.
 
-To use an internal HTTP server, an Artifactory generic remote, or a local `file:` mirror, set the release base URL. The mirror must provide both the archive and its `.sha256` file at:
+To use an internal web server (HTTP or HTTPS), an Artifactory generic remote, or a local `file:` mirror, set the release base URL. The mirror must provide both the archive and its `.sha256` file at:
 
 ```text
 <base>/firtool-<version>/firrtl-bin-<platform>.<ext>

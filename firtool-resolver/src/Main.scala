@@ -248,20 +248,22 @@ object Resolve {
   }
 
   /** Find the release asset for the primary platform, or else for its fallback platform. */
-  private def findRelease(logger: Logger, version: String, primary: String): Either[String, GitHub.Release] =
-    GitHub.lookup(logger, version, primary) match {
-      case Some(release) => Right(release)
-      case None =>
-        val fallback = fallbackPlatform(primary)
-        fallback.flatMap(GitHub.lookup(logger, version, _)) match {
-          case Some(release) =>
-            logger.warn(s"Falling back to platform ${release.platform} (no $primary release asset for firtool $version)")
-            Right(release)
-          case None =>
-            val platforms = (primary +: fallback.toSeq).mkString(" or ")
-            Left(s"No GitHub release asset for firtool $version on $platforms")
+  private def findRelease(logger: Logger, version: String, primary: String): Either[String, GitHub.Release] = {
+    val fallback = fallbackPlatform(primary)
+    // Option#orElse is by-name, so the fallback lookup (and its warning) only happens if the primary is missing.
+    GitHub
+      .lookup(logger, version, primary)
+      .orElse {
+        fallback.flatMap(GitHub.lookup(logger, version, _)).map { release =>
+          logger.warn(s"Falling back to platform ${release.platform} (no $primary release asset for firtool $version)")
+          release
         }
-    }
+      }
+      .toRight {
+        val platforms = (primary +: fallback.toSeq).mkString(" or ")
+        s"No GitHub release asset for firtool $version on $platforms"
+      }
+  }
 
   private def warnIfVersionDiffers(logger: Logger, binary: Path, version: String): Unit = {
     val output = mutable.ArrayBuffer.empty[String]
