@@ -36,7 +36,15 @@ private[firtoolresolver] object GitHub {
     catch { case _: FileNotFoundException => throw new NotFound(url) } // file: URLs
   }
 
-  /** Look up the release asset and its checksum. None means the asset is not published for this platform. */
+  /** Look up the release asset and its checksum. None means the asset is not published for this platform.
+    *
+    * The checksum comes from the `<asset>.sha256` file published next to the asset, not from the `digest` field
+    * of the GitHub releases API, because:
+    *  - `chisel.firtool.url` mirrors are plain file trees and do not implement the API
+    *  - releases up to firtool-1.119.0 have `"digest": null`, while the .sha256 files exist for all versions
+    *  - the API is rate limited (60 requests/hour unauthenticated), the download URLs are not
+    *  - using the API would require parsing JSON
+    */
   def lookup(logger: Logger, version: String, platform: String): Option[Release] = {
     val circtPlatform = if (platform == "macos-aarch64") "macos-arm64" else platform
     val extension = if (platform.startsWith("windows-")) "zip" else "tar.gz"
