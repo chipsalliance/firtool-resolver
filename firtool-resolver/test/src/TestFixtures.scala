@@ -56,3 +56,30 @@ private[firtoolresolver] trait TemporaryDirectorySuite extends munit.FunSuite {
     }
   )
 }
+
+/** FileCheck-style assertions over a log: `has`/`rx` must match in order. */
+private[firtoolresolver] final case class Check(pattern: java.util.regex.Pattern)
+private[firtoolresolver] object Check {
+
+  /** Literal substring (like CHECK). */
+  def has(text: String): Check = rx(java.util.regex.Pattern.quote(text))
+
+  /** Regular expression (like CHECK with {{...}}). */
+  def rx(regex: String): Check = Check(java.util.regex.Pattern.compile(regex))
+}
+
+private[firtoolresolver] trait LogAssertions { self: munit.FunSuite =>
+  def assertAbsent(log: String, texts: String*)(implicit loc: munit.Location): Unit =
+    texts.foreach(t => assert(!log.contains(t), s"unexpected '$t' in:\n$log"))
+
+  def checkLog(log: String, checks: Check*)(implicit loc: munit.Location): Unit = {
+    var position = 0
+    checks.foreach { check =>
+      val matcher = check.pattern.matcher(log)
+      if (!matcher.find(position)) {
+        fail(s"expected match for ${check.pattern} after offset $position\n--- full log ---\n$log")
+      }
+      position = matcher.end
+    }
+  }
+}

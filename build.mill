@@ -186,8 +186,17 @@ trait FirtoolResolver extends CrossScalaModule with ChipsAlliancePublishModule {
     def ivyDeps = Agg(ivy"org.scalameta::munit:1.3.6")
     // Mill loads tests through a separate classloader. Give subprocess tests
     // the complete classpath explicitly rather than the test runner's launcher.
+    //  - classpath:        unshaded core classes plus their dependencies
+    //  - shaded.classpath: what a user gets from the published artifact, i.e. the shaded
+    //                      assembly plus the dynamic (Scala) dependencies from the outer module
+    //  - jar:              the published jar, for packaging checks
     def forkArgs = T {
-      Seq("-Dfirtoolresolver.test.classpath=" + runClasspath().map(_.path.toString).mkString(java.io.File.pathSeparator))
+      def cp(files: Agg[PathRef]) = files.map(_.path.toString).mkString(java.io.File.pathSeparator)
+      Seq(
+        "-Dfirtoolresolver.test.classpath=" + cp(runClasspath()),
+        "-Dfirtoolresolver.test.shaded.classpath=" + cp(root.runClasspath()),
+        "-Dfirtoolresolver.test.jar=" + root.jar().path
+      )
     }
   }
 }
