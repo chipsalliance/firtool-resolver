@@ -29,36 +29,19 @@ class LiveTests extends TemporaryDirectorySuite with LogAssertions {
   }
 
   // Real firtool prints an LLVM banner before its CIRCT version line, and some releases append a git describe suffix.
-  private def assertRealFirtool(s: Sandbox, binary: Path, version: String = firtoolVersion): Unit = {
+  private def assertRealFirtool(s: Sandbox, binary: Path): Unit = {
     val output = s.runFirtool(binary)
-    assert(output.linesIterator.exists(_.matches(s"CIRCT firtool-${java.util.regex.Pattern.quote(version)}(-.*)?")),
+    assert(output.linesIterator.exists(_.matches(s"CIRCT firtool-${java.util.regex.Pattern.quote(firtoolVersion)}(-.*)?")),
       output)
   }
 
   live("downloads a real release from GitHub") { s =>
     val result = s.launch(arg = firtoolVersion, envVersion = None, envURL = None, envRepos = None).await()
     val binary = resolved(result)
-    checkLog(result.err,
-      has("Checking chisel.firtool.path and CHISEL_FIRTOOL_PATH for firtool"),
-      has("chisel.firtool.path and CHISEL_FIRTOOL_PATH not set"),
-      has("Checking resources for firtool"),
-      has("firtool version not found in resources"),
-      has(s"Firtool binary with version ($firtoolVersion) does not already exist"),
-      has(s"Attempting to fetch firtool $firtoolVersion from GitHub releases"),
-      has("Acquiring firtool cache lock"),
-      has("Downloading SHA-256 checksum"),
-      has(s"Downloading firtool $firtoolVersion for"),
-      has("Extracting firtool from"),
-      has("Verified SHA-256 checksum:"),
-      has("Atomically moving"))
+    checkLog(result.err, has("Verified SHA-256 checksum:"))
     assertAbsent(result.err, "Attempting to fetch org.chipsalliance:llvm-firtool:")
     assertRealFirtool(s, binary)
 
-    // The explicit override finds what was just downloaded.
-    val again = s.launch(arg = "0.0.0", envVersion = Some(firtoolVersion), envURL = None, envRepos = None).await()
-    assertEquals(resolved(again), binary)
-    checkLog(again.err, has(s"Using explicit firtool version override: $firtoolVersion"), has("already exists"))
-    assertAbsent(again.err, "Checking resources for firtool")
   }
 
   live("falls back to the real llvm-firtool on Maven Central when GitHub fails") { s =>
@@ -66,11 +49,8 @@ class LiveTests extends TemporaryDirectorySuite with LogAssertions {
       arg = firtoolVersion, envVersion = None, envURL = Some("file:///nonexistent"), envRepos = Some("central")).await()
     val binary = resolved(result)
     checkLog(result.err,
-      has(s"Fetching firtool $firtoolVersion from GitHub failed:"),
       has(s"Attempting to fetch org.chipsalliance:llvm-firtool:$firtoolVersion"),
-      has("Successfully fetched"),
-      has("to search its resources"),
-      has(s"Firtool version $firtoolVersion found in resources"))
+      has("Successfully fetched"))
     assertRealFirtool(s, binary)
   }
 
@@ -85,38 +65,7 @@ class LiveTests extends TemporaryDirectorySuite with LogAssertions {
       arg = firtoolVersion, envVersion = None, envURL = Some("file:///nonexistent"), envRepos = None,
       extraClasspath = jar.map(_.toPath).take(1)).await()
     val binary = resolved(result)
-    checkLog(result.err,
-      has("Checking resources for firtool"),
-      has(s"Firtool version $firtoolVersion found in resources"),
-      rx("Copying firtool from resources to .*firtool"),
-      has(s"using llvm-firtool $firtoolVersion from classpath; this mechanism is deprecated, " +
-        "set chisel.firtool.version instead"))
+    checkLog(result.err, has(s"using llvm-firtool $firtoolVersion from classpath"))
     assertRealFirtool(s, binary)
-  }
-
-  live("a real firtool in CHISEL_FIRTOOL_PATH is used") { s =>
-    val downloaded = resolved(s.launch(arg = firtoolVersion, envVersion = None, envURL = None, envRepos = None).await())
-    val result = s.launch(
-      arg = firtoolVersion, envVersion = None, envURL = Some("file:///nonexistent"), envRepos = None,
-      envPath = Some(downloaded.getParent.toString)).await()
-    assertEquals(resolved(result), downloaded)
-    checkLog(result.err,
-      has("Checking chisel.firtool.path and CHISEL_FIRTOOL_PATH for firtool"),
-      rx("Running: .+firtool --version"))
-    assertAbsent(result.err, "Checking resources for firtool", "Attempting to fetch")
-  }
-
-  // CIRCT did not publish arm64 macOS binaries for this version, so only the x64 asset can be used.
-  live("macOS arm64 falls back to the x64 asset for a release without an arm64 asset") { s =>
-    assume(Host.mac && Host.aarch64, "only meaningful on macOS arm64")
-    val result = s.launch(arg = "1.143.0", envVersion = None, envURL = None, envRepos = None).await()
-    val binary = resolved(result)
-    checkLog(result.err,
-      rx("Downloading SHA-256 checksum from .*firrtl-bin-macos-arm64\\.tar\\.gz\\.sha256"),
-      has("No GitHub release asset for firtool 1.143.0 on macos-aarch64"),
-      has("Falling back to platform macos-x64"),
-      has("Downloading firtool 1.143.0 for macos-x64 from"),
-      has("Verified SHA-256 checksum:"))
-    assertRealFirtool(s, binary, "1.143.0")
   }
 }

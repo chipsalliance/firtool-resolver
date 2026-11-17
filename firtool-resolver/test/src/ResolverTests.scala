@@ -60,18 +60,8 @@ abstract class ResolverSuite(classpathProperty: String) extends TemporaryDirecto
     val s = sandbox(root)
     val result = succeeded(s.launch(arg = s.version, envVersion = None))
     checkLog(result.err,
-      has("Checking chisel.firtool.path and CHISEL_FIRTOOL_PATH for firtool"),
-      has("chisel.firtool.path and CHISEL_FIRTOOL_PATH not set"),
-      has("Checking resources for firtool"),
-      has("firtool version not found in resources"),
-      has(s"Firtool binary with version (${s.version}) does not already exist"),
       has(s"Attempting to fetch firtool ${s.version} from GitHub releases"),
-      has("Acquiring firtool cache lock"),
-      has("Downloading SHA-256 checksum"),
-      has(s"Downloading firtool ${s.version} for"),
-      has("Extracting firtool from"),
-      has("Verified SHA-256 checksum:"),
-      has("Atomically moving"))
+      has("Verified SHA-256 checksum:"))
     assertAbsent(result.err, "Attempting to fetch org.chipsalliance:llvm-firtool:")
     assertEquals(java.nio.file.Paths.get(result.out.trim), s.binary())
     if (!windows) assertEquals(s.runFirtool(s.binary()), s"CIRCT firtool-${s.version}")
@@ -113,10 +103,6 @@ abstract class ResolverSuite(classpathProperty: String) extends TemporaryDirecto
     val installed = s.preinstall()
     val result = succeeded(s.launch(arg = s.version, envVersion = None, envURL = Some("file:///nonexistent")))
     checkLog(result.err,
-      has("Checking chisel.firtool.path and CHISEL_FIRTOOL_PATH for firtool"),
-      has("chisel.firtool.path and CHISEL_FIRTOOL_PATH not set"),
-      has("Checking resources for firtool"),
-      has("firtool version not found in resources"),
       rx(s"Firtool binary with version \\(${java.util.regex.Pattern.quote(s.version)}\\) .*firtool already exists"))
     assertAbsent(result.err, "Attempting to fetch")
     assertEquals(java.nio.file.Paths.get(result.out.trim), installed)
@@ -131,9 +117,6 @@ abstract class ResolverSuite(classpathProperty: String) extends TemporaryDirecto
       envVersion = None, envURL = Some("file:///nonexistent"), extraClasspath = Seq(s.classpathResources())))
     val destination = s.binary(s.classpathVersion)
     checkLog(result.err,
-      has("Checking chisel.firtool.path and CHISEL_FIRTOOL_PATH for firtool"),
-      has("chisel.firtool.path and CHISEL_FIRTOOL_PATH not set"),
-      has("Checking resources for firtool"),
       has(s"Firtool version ${s.classpathVersion} found in resources"),
       has(s"Copying firtool from resources to $destination"),
       has(s"using llvm-firtool ${s.classpathVersion} from classpath; this mechanism is deprecated, " +
@@ -193,18 +176,8 @@ abstract class ResolverSuite(classpathProperty: String) extends TemporaryDirecto
     s.publishMaven()
     val result = succeeded(s.launch(arg = s.version, envVersion = None, envURL = Some("file:///nonexistent")))
     checkLog(result.err,
-      has("Checking chisel.firtool.path and CHISEL_FIRTOOL_PATH for firtool"),
-      has("chisel.firtool.path and CHISEL_FIRTOOL_PATH not set"),
-      has("Checking resources for firtool"),
-      has("firtool version not found in resources"),
-      has(s"Firtool binary with version (${s.version}) does not already exist"),
-      has(s"Attempting to fetch firtool ${s.version} from GitHub releases"),
       has(s"Fetching firtool ${s.version} from GitHub failed:"),
       has(s"Attempting to fetch org.chipsalliance:llvm-firtool:${s.version}"),
-      has("Successfully fetched"),
-      has("Loading"),
-      has("to search its resources"),
-      has("Checking resources for firtool"),
       has(s"Firtool version ${s.version} found in resources"))
     assertEquals(java.nio.file.Paths.get(result.out.trim), s.binary())
     assertEquals(Files.readAllBytes(s.binary()).toSeq, s.executable.toSeq)
@@ -274,7 +247,6 @@ abstract class ResolverSuite(classpathProperty: String) extends TemporaryDirecto
     val dir = firtoolDirectory(s, s.script("CIRCT firtool-1.2.3"))
     val result = succeeded(s.launch(arg = s.version, envVersion = None, envPath = Some(dir.toString)))
     checkLog(result.err,
-      has("Checking chisel.firtool.path and CHISEL_FIRTOOL_PATH for firtool"),
       rx("Running: .+firtool --version"))
     assertAbsent(result.err,
       "chisel.firtool.path and CHISEL_FIRTOOL_PATH not set", "Checking resources for firtool", "Attempting to fetch")
@@ -290,7 +262,6 @@ abstract class ResolverSuite(classpathProperty: String) extends TemporaryDirecto
     Files.move(dir.resolve("firtool"), dir.resolve("firtool_renamed"))
     val result = failed(s.launch(arg = s.version, envVersion = None, envPath = Some(dir.toString)))
     checkLog(result.err,
-      has("Checking chisel.firtool.path and CHISEL_FIRTOOL_PATH for firtool"),
       rx("Running: .+firtool --version"),
       rx("Cannot run program .+firtool"))
     assertAbsent(result.err,

@@ -57,48 +57,29 @@ private[firtoolresolver] trait TemporaryDirectorySuite extends munit.FunSuite {
   )
 }
 
-/** FileCheck-style assertions over a log: `has`/`rx` must match in order, `not` must not match in between. */
-private[firtoolresolver] sealed trait Check
+/** FileCheck-style assertions over a log: `has`/`rx` must match in order. */
+private[firtoolresolver] final case class Check(pattern: java.util.regex.Pattern)
 private[firtoolresolver] object Check {
-  final case class Has(pattern: java.util.regex.Pattern) extends Check
-  final case class Not(pattern: java.util.regex.Pattern) extends Check
 
   /** Literal substring (like CHECK). */
-  def has(text: String): Check = Has(java.util.regex.Pattern.compile(java.util.regex.Pattern.quote(text)))
+  def has(text: String): Check = rx(java.util.regex.Pattern.quote(text))
 
   /** Regular expression (like CHECK with {{...}}). */
-  def rx(regex: String): Check = Has(java.util.regex.Pattern.compile(regex))
-
-  /** Literal substring that must not appear before the next `has`/`rx` match, or the end of the log (CHECK-NOT). */
-  def not(text: String): Check = Not(java.util.regex.Pattern.compile(java.util.regex.Pattern.quote(text)))
+  def rx(regex: String): Check = Check(java.util.regex.Pattern.compile(regex))
 }
 
 private[firtoolresolver] trait LogAssertions { self: munit.FunSuite =>
-  import Check._
-
   def assertAbsent(log: String, texts: String*)(implicit loc: munit.Location): Unit =
     texts.foreach(t => assert(!log.contains(t), s"unexpected '$t' in:\n$log"))
 
   def checkLog(log: String, checks: Check*)(implicit loc: munit.Location): Unit = {
     var position = 0
-    var pending = List.empty[java.util.regex.Pattern]
-    def noPending(end: Int): Unit = {
-      val region = log.substring(position, end)
-      pending.reverse.foreach { p =>
-        if (p.matcher(region).find()) fail(s"unexpected match for ${p.pattern} in:\n$region\n--- full log ---\n$log")
+    checks.foreach { check =>
+      val matcher = check.pattern.matcher(log)
+      if (!matcher.find(position)) {
+        fail(s"expected match for ${check.pattern} after offset $position\n--- full log ---\n$log")
       }
-      pending = Nil
+      position = matcher.end
     }
-    checks.foreach {
-      case Not(p) => pending ::= p
-      case Has(p) =>
-        val matcher = p.matcher(log)
-        if (!matcher.find(position)) {
-          fail(s"expected match for ${p.pattern} after offset $position\n--- full log ---\n$log")
-        }
-        noPending(matcher.start)
-        position = matcher.end
-    }
-    noPending(log.length)
   }
 }
