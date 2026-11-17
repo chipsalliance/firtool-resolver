@@ -2,16 +2,6 @@ name: Test
 
 on:
   workflow_call:
-    inputs:
-      version:
-        description: 'The version of firtool and llvm-firtool to test'
-        required: true
-        type: string
-      snapshot:
-        description: 'Should the version of llvm-resolver be a SNAPSHOT'
-        default: 'true'
-        required: true
-        type: string
 
 jobs:
   ci:
@@ -56,16 +46,6 @@ jobs:
         uses: coursier/setup-action@v2
         with:
           jvm: temurin:17
-      - name: Set versions
-        shell: bash
-        run: |
-          if [[ "${{ inputs.snapshot }}" = 'true' ]]; then
-            IS_PRERELEASE=1
-          else
-            IS_PRERELEASE=0
-          fi
-          echo "LLVM_FIRTOOL_PRERELEASE=$IS_PRERELEASE" >> "$GITHUB_ENV"
-          echo "LLVM_FIRTOOL_VERSION=${{ inputs.version }}" >> "$GITHUB_ENV"
       - name: Run Test
         shell: bash
         run: |
