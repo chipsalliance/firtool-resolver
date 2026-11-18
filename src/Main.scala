@@ -8,12 +8,9 @@ import scala.io.Source
 import java.io.File
 import java.nio.file.{Path, Paths, Files, StandardCopyOption, StandardOpenOption}
 import java.nio.channels.FileChannel
-import java.net.URLClassLoader
 import scala.sys.process._
 
 import dev.dirs.ProjectDirectories
-import coursier._
-import coursier.core.Extension
 
 final case class FirtoolBinary(path: File, version: String)
 
@@ -23,7 +20,6 @@ final case class FirtoolBinary(path: File, version: String)
   *   - Check for firtool on the CHISEL_FIRTOOL_PATH, note any version mismatch
   *   - Honor an explicit version override, otherwise check classpath resources
   *   - Reuse the version's cache, or download and verify a GitHub release
-  *   - Use Coursier to fetch legacy Maven artifacts as a last resort
   */
 object Resolve {
 
@@ -163,7 +159,7 @@ object Resolve {
     }
   }
 
-  private def checkResources(classloader: Option[URLClassLoader], logger: Logger): Either[String, FirtoolBinary] = {
+  private def checkResources(logger: Logger): Either[String, FirtoolBinary] = {
     val platform = determinePlatform(logger)
     logger.debug("Checking resources for firtool")
     if (platform.isLeft) {
@@ -171,7 +167,7 @@ object Resolve {
       return Left(platform.merge) // Help out the type system
     }
     val primaryPlatform = platform.toOption.get
-    val resourceLoader = classloader.getOrElse(this.getClass.getClassLoader)
+    val resourceLoader = this.getClass.getClassLoader
 
     val baseDir = s"$groupId/$artId"
     val versionFile = resourceLoader.getResource(s"$baseDir/project.version")
@@ -308,60 +304,6 @@ object Resolve {
     }
   }
 
-  private def fetchArtifact(logger: Logger, defaultVersion: String): Either[String, FirtoolBinary] = {
-    val platform =
-      determinePlatform(logger) match {
-        case Left(msg) =>
-          logger.debug(msg)
-          return Left(msg)
-        case Right(name) => name
-      }
-
-    // Try fetching for a specific platform classifier; returns Left on any failure.
-    def tryFetch(p: String): Either[String, FirtoolBinary] = {
-      // See coursier.parse.DependencyParser to understand how the classifier is added via Publication
-      val org = Organization(groupId)
-      val module = Module(org, ModuleName(s"$artId"), Map())
-      val dep =
-        Dependency(module, defaultVersion)
-          .withPublication("", Type.empty, Extension.empty, Classifier(p))
-      // One would think there'd be a built-in pretty print like this but there isn't
-      //   (coursier.util.Print doesn't include the classifier)
-      logger.debug(s"Attempting to fetch ${dep.module}:${dep.version},classifier=${p}")
-
-      val resolution = Try {
-        coursier.Fetch()
-          .addDependencies(dep)
-          .run()
-      }
-      if (resolution.isFailure) {
-        val msg = resolution.failed.get.toString + "\n" // Coursier's message is already pretty good
-        logger.debug(msg)
-        return Left(msg)
-      }
-      // Head here is dangerous, without the classifier, multiple jars are fetched
-      val jar = resolution.get.head
-      logger.debug(s"Successfully fetched $jar")
-
-      logger.debug(s"Loading $jar to search its resources")
-      // A version override must not be shadowed by resources in the parent classloader.
-      val classloader = new URLClassLoader(Array(jar.toURI.toURL), null)
-      try checkResources(Some(classloader), logger)
-      finally classloader.close()
-    }
-
-    tryFetch(platform) match {
-      case right @ Right(_) => right
-      case left @ Left(_) =>
-        fallbackPlatform(platform) match {
-          case Some(fallback) =>
-            logger.debug(s"Falling back to platform $fallback")
-            tryFetch(fallback)
-          case None => left
-        }
-    }
-  }
-
   /** Lookup firtool binary
     *
     * @param defaultVersion fallback version to fetch if not found in CHISEL_FIRTOOL_PATH nor on classpath
@@ -386,7 +328,7 @@ object Resolve {
               logger.warn(s"Firtool version override $v takes precedence over llvm-firtool $classpathVersion on the classpath")
             }
             Left("Classpath lookup skipped because an explicit firtool version is set")
-          case None => checkResources(None, logger).map { binary =>
+          case None => checkResources(logger).map { binary =>
             logger.info(s"using llvm-firtool ${binary.version} from classpath; this mechanism is deprecated, set chisel.firtool.version instead")
             binary
           }
@@ -400,8 +342,7 @@ object Resolve {
             for {
               cacheError <- checkInstalled(logger, version).left
               githubError <- fetchFromGitHub(logger, version).left
-              mavenError <- fetchArtifact(logger, version).left
-            } yield List("Failed to fetch firtool:", pathError, resourceError, cacheError, githubError, mavenError).mkString("\n")
+            } yield List("Failed to fetch firtool:", pathError, resourceError, cacheError, githubError).mkString("\n")
         }
     }
   }

@@ -7,9 +7,9 @@ import java.nio.file.{Files, Path}
 import java.security.MessageDigest
 import java.util.zip.{GZIPOutputStream, ZipEntry, ZipOutputStream}
 import org.apache.commons.compress.archivers.tar.{TarArchiveEntry, TarArchiveOutputStream}
-import scala.jdk.CollectionConverters._
+import scala.collection.JavaConverters._
 
-/** Builders for local release mirrors and Maven fixtures. */
+/** Builders for local release mirrors. */
 private[firtoolresolver] object TestFixtures {
   def bytes(value: String): Array[Byte] = value.getBytes(UTF_8)
 
@@ -31,7 +31,6 @@ private[firtoolresolver] object TestFixtures {
     } finally output.close()
   }
 
-  // ZIP is also used to build the legacy Maven jar fixture.
   def zip(path: Path, entries: Seq[Entry]): Unit = {
     val output = new ZipOutputStream(Files.newOutputStream(path))
     try entries.foreach { entry =>

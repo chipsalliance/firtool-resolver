@@ -40,7 +40,7 @@ private[firtoolresolver] final class Child(process: Process, outFile: Path, errF
   }
 }
 
-/** A hermetic world for one test: a fake GitHub release mirror, a fake Maven repository, a firtool cache, and
+/** A hermetic world for one test: a fake GitHub release mirror, a firtool cache, and
   * the ability to launch the resolver's `Main` in a fresh JVM against all of them.
   *
   * @param classpathProperty system property holding the classpath to launch the resolver with
@@ -55,7 +55,6 @@ private[firtoolresolver] class Sandbox(
   val classpathVersion = "1.0.0-classpath"
   val base: Path = root.resolve("mirror")
   val cache: Path = root.resolve("cache")
-  val maven: Path = root.resolve("maven")
 
   def script(output: String, exitCode: Int = 0): Array[Byte] = bytes(s"#!/bin/sh\necho $output\nexit $exitCode\n")
   val executable: Array[Byte] = script(s"CIRCT firtool-$version")
@@ -81,25 +80,12 @@ private[firtoolresolver] class Sandbox(
   /** The asset of the first platform, for tests which tamper with it. */
   def asset: Asset = assets.head
 
-  /** Publish the legacy llvm-firtool jars (one per platform classifier) into the fake Maven repository. */
-  def publishMaven(forVersion: String = version, forPlatforms: Seq[String] = Seq(Host.platform)): Unit = {
-    val dir = maven.resolve(s"org/chipsalliance/llvm-firtool/$forVersion")
-    write(dir.resolve(s"llvm-firtool-$forVersion.pom"), bytes(
-      s"<project><modelVersion>4.0.0</modelVersion><groupId>org.chipsalliance</groupId>" +
-        s"<artifactId>llvm-firtool</artifactId><version>$forVersion</version></project>"))
-    forPlatforms.foreach { platform =>
-      zip(dir.resolve(s"llvm-firtool-$forVersion-$platform.jar"), Seq(
-        Entry("org.chipsalliance/llvm-firtool/project.version", bytes(forVersion)),
-        Entry(s"org.chipsalliance/llvm-firtool/$platform/bin/firtool", executable)))
-    }
-  }
-
   /** Resources as llvm-firtool puts them on the classpath, as a directory to add to the classpath. */
-  def classpathResources(forVersion: String = classpathVersion): Path = {
+  def classpathResources(forVersion: String = classpathVersion, platform: String = Host.platform): Path = {
     val resources = root.resolve("resources")
     val dir = "org.chipsalliance/llvm-firtool"
     write(resources.resolve(s"$dir/project.version"), bytes(forVersion))
-    write(resources.resolve(s"$dir/${Host.platform}/bin/firtool"), executable)
+    write(resources.resolve(s"$dir/$platform/bin/firtool"), executable)
     resources
   }
 
@@ -124,7 +110,6 @@ private[firtoolresolver] class Sandbox(
     envURL: Option[String] = Some(base.toUri.toString),
     envCache: Option[String] = Some(cache.toString),
     envPath: Option[String] = None,
-    envRepos: Option[String] = Some(maven.toUri.toString),
     javaOpts: Seq[String] = Nil,
     extraClasspath: Seq[Path] = Nil
   ): Child = {
@@ -141,13 +126,11 @@ private[firtoolresolver] class Sandbox(
       .redirectError(err.toFile)
     val env = builder.environment()
     Seq("CHISEL_FIRTOOL_PATH", "CHISEL_FIRTOOL_VERSION", "CHISEL_FIRTOOL_CACHE", "CHISEL_FIRTOOL_URL",
-      "COURSIER_REPOSITORIES", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS").foreach(env.remove(_))
+      "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS").foreach(env.remove(_))
     envPath.foreach(env.put("CHISEL_FIRTOOL_PATH", _))
     envVersion.foreach(env.put("CHISEL_FIRTOOL_VERSION", _))
     envCache.foreach(env.put("CHISEL_FIRTOOL_CACHE", _))
     envURL.foreach(env.put("CHISEL_FIRTOOL_URL", _))
-    envRepos.foreach(env.put("COURSIER_REPOSITORIES", _))
-    env.put("COURSIER_CACHE", root.resolve("coursier").toString)
     new Child(builder.start(), out, err)
   }
 
