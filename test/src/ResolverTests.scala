@@ -262,6 +262,23 @@ abstract class ResolverSuite(classpathProperty: String) extends TemporaryDirecto
 
   // ---- System properties and environment variables ----
 
+  directory.test("a named project uses its own version, cache and mirror and ignores the Chisel path") { root =>
+    val s = sandbox(root)
+    val result = succeeded(s.launch(project = Some("Acme"), envPath = Some("missing-chisel-path"),
+      envURL = Some("file:///missing-chisel-mirror"), envCache = Some(root.resolve("chisel-cache").toString),
+      javaOpts = Seq(s"-Dacme.firtool.url=${s.base.toUri}", s"-Dacme.firtool.version=${s.version}"),
+      extraEnv = Map("ACME_FIRTOOL_VERSION" -> "0.0.1", "ACME_FIRTOOL_CACHE" -> s.cache.toString)))
+    assertEquals(java.nio.file.Paths.get(result.out.trim), s.binary())
+    assert(result.err.contains("acme.firtool.path and ACME_FIRTOOL_PATH not set"), result.output)
+  }
+
+  directory.test("a named project reports its own path override") { root =>
+    val s = sandbox(root)
+    val missing = root.resolve("missing")
+    val result = failed(s.launch(project = Some("Acme"), extraEnv = Map("ACME_FIRTOOL_PATH" -> missing.toString)))
+    assert(result.err.contains(s"ACME_FIRTOOL_PATH ($missing) does not exist"), result.output)
+  }
+
   directory.test("chisel.firtool.cache property takes precedence over CHISEL_FIRTOOL_CACHE") { root =>
     val s = sandbox(root)
     val propCache = root.resolve("prop-cache")

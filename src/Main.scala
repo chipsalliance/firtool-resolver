@@ -6,6 +6,7 @@ import scala.util.{Failure, Success, Try}
 import scala.collection.mutable
 import scala.io.Source
 import java.io.File
+import java.util.Locale
 import java.nio.file.{Path, Paths, Files, StandardCopyOption, StandardOpenOption}
 import java.nio.channels.FileChannel
 import scala.sys.process._
@@ -17,11 +18,37 @@ final case class FirtoolBinary(path: File, version: String)
 /** Resolve a firtool binary
   *
   * The basic algorithm is as follows
-  *   - Check for firtool on the CHISEL_FIRTOOL_PATH, note any version mismatch
+  *   - Check the project's configured firtool path
   *   - Honor an explicit version override, otherwise check classpath resources
   *   - Reuse the version's cache, or download and verify a GitHub release
   */
 object Resolve {
+  @deprecated("Pass a project name: Resolve(\"chisel\", defaultVersion, verbose)", "next")
+  def apply(defaultVersion: String, verbose: Boolean = false): Either[String, FirtoolBinary] =
+    apply("chisel", defaultVersion, verbose)
+
+  @deprecated("Pass a project name: Resolve(logger, \"chisel\", defaultVersion)", "next")
+  def apply(logger: Logger, defaultVersion: String): Either[String, FirtoolBinary] =
+    apply(logger, "chisel", defaultVersion)
+
+  def apply(projectName: String, defaultVersion: String): Either[String, FirtoolBinary] =
+    apply(projectName, defaultVersion, verbose = false)
+
+  def apply(projectName: String, defaultVersion: String, verbose: Boolean): Either[String, FirtoolBinary] =
+    apply(if (verbose) Logger.debug else Logger.warn, projectName, defaultVersion)
+
+  /** Resolve firtool using `<project>.firtool.*` properties and `<PROJECT>_FIRTOOL_*` environment variables. */
+  def apply(logger: Logger, projectName: String, defaultVersion: String): Either[String, FirtoolBinary] =
+    new Resolver(projectName).resolve(logger, defaultVersion)
+}
+
+private final class Resolver(projectName: String) {
+  private case class Setting(name: String) {
+    val property = s"${projectName.toLowerCase(Locale.ROOT)}.firtool.$name"
+    val environment = s"${projectName}_FIRTOOL_$name".toUpperCase(Locale.ROOT)
+    def configured = sys.props.get(property).map(property -> _).orElse(sys.env.get(environment).map(environment -> _))
+    def value = configured.map(_._2)
+  }
 
   private lazy val operatingSystem: Either[String, String] = {
     // Mac OS X
@@ -69,8 +96,7 @@ object Resolve {
   }.toOption
 
   private def cacheDir: String = {
-    val path = sys.props.get("chisel.firtool.cache")
-      .orElse(sys.env.get("CHISEL_FIRTOOL_CACHE"))
+    val path = Setting("cache").value
       .getOrElse(ProjectDirectories.from("", groupId, artId).cacheDir)
     new File(path).getAbsolutePath()
   }
@@ -105,14 +131,13 @@ object Resolve {
     def Recoverable(msg: String): Either[String, Either[String, FirtoolBinary]] = Right(Left(msg))
     def Unrecoverable(msg: String): Either[String, Either[String, FirtoolBinary]] = Left(msg)
 
-    logger.debug("Checking chisel.firtool.path and CHISEL_FIRTOOL_PATH for firtool")
+    val path = Setting("path")
+    logger.debug(s"Checking ${path.property} and ${path.environment} for firtool")
 
     // TODO make this function more consistent between return and matching
-    val propPath = sys.props.get("chisel.firtool.path").map("chisel.firtool.path" -> _)
-    val envPath = sys.env.get("CHISEL_FIRTOOL_PATH").map("CHISEL_FIRTOOL_PATH" -> _)
-    val firtoolPathOpt = propPath.orElse(envPath)
+    val firtoolPathOpt = path.configured
     if (firtoolPathOpt.isEmpty) {
-      val msg = "chisel.firtool.path and CHISEL_FIRTOOL_PATH not set"
+      val msg = s"${path.property} and ${path.environment} not set"
       logger.debug(msg)
       return Recoverable(msg)
     }
@@ -203,7 +228,7 @@ object Resolve {
     // Check if binary already exists
     if (destFile.isFile()) {
       logger.debug(s"Firtool binary $destFile already exists")
-    } else this.synchronized {
+    } else Resolve.synchronized {
       // Copy
       // This can be executed by many threads or processes at a time so use atomic move
       logger.debug(s"Copying firtool from resources to $destFile")
@@ -235,7 +260,7 @@ object Resolve {
   }
 
   /** Run body while holding the per-version cache lock, both within this JVM and across processes. */
-  private def withVersionLock[A](logger: Logger, version: String)(body: => A): A = this.synchronized {
+  private def withVersionLock[A](logger: Logger, version: String)(body: => A): A = Resolve.synchronized {
     val cache = Paths.get(cacheDir)
     Files.createDirectories(cache)
     val lockPath = cache.resolve(s"$version.lock")
@@ -251,11 +276,12 @@ object Resolve {
   /** Find the release asset for the primary platform, or else for its fallback platform. */
   private def findRelease(logger: Logger, version: String, primary: String): Either[String, GitHub.Release] = {
     val fallback = fallbackPlatform(primary)
+    val base = Setting("url").value.getOrElse("https://github.com/llvm/circt/releases/download")
     // Option#orElse is by-name, so the fallback lookup (and its warning) only happens if the primary is missing.
     GitHub
-      .lookup(logger, version, primary)
+      .lookup(logger, base, version, primary)
       .orElse {
-        fallback.flatMap(GitHub.lookup(logger, version, _)).map { release =>
+        fallback.flatMap(GitHub.lookup(logger, base, version, _)).map { release =>
           logger.warn(s"Falling back to platform ${release.platform} (no $primary release asset for firtool $version)")
           release
         }
@@ -304,22 +330,12 @@ object Resolve {
     }
   }
 
-  /** Lookup firtool binary
-    *
-    * @param defaultVersion fallback version to fetch if not found in CHISEL_FIRTOOL_PATH nor on classpath
-    * @param verbose print verbose logging information
-    * @return Either an error message or the firtool binary
-    */
-  def apply(defaultVersion: String, verbose: Boolean = false): Either[String, FirtoolBinary] = {
-    val logger = if (verbose) Logger.debug else Logger.warn
-    apply(logger, defaultVersion)
-  }
-
-  def apply(logger: Logger, defaultVersion: String): Either[String, FirtoolBinary] = {
+  def resolve(logger: Logger, defaultVersion: String): Either[String, FirtoolBinary] = {
     checkFirtoolPath(logger).flatMap {
       case Right(binary) => Right(binary)
       case Left(pathError) =>
-        val overrideVersion = sys.props.get("chisel.firtool.version").orElse(sys.env.get("CHISEL_FIRTOOL_VERSION"))
+        val setting = Setting("version")
+        val overrideVersion = setting.value
         val version = overrideVersion.getOrElse(defaultVersion)
         val resources = overrideVersion match {
           case Some(v) =>
@@ -329,7 +345,7 @@ object Resolve {
             }
             Left("Classpath lookup skipped because an explicit firtool version is set")
           case None => checkResources(logger).map { binary =>
-            logger.info(s"using llvm-firtool ${binary.version} from classpath; this mechanism is deprecated, set chisel.firtool.version instead")
+            logger.info(s"using llvm-firtool ${binary.version} from classpath; this mechanism is deprecated, set ${setting.property} instead")
             binary
           }
         }
@@ -351,23 +367,20 @@ object Resolve {
 
 object Main extends App {
   def usageErr(): Nothing = {
-    System.err.println("USAGE: firtool-resolver [-v] <version>")
+    System.err.println("USAGE: firtool-resolver [--project <name>] [-v] <version>")
     sys.exit(1)
   }
   // Trying to avoid argument parser dependency if possible, just contributes to dependency hell
-  val (verbose, version) =
-    args.size match {
-      case 1 =>
-        (false, args(0))
-      case 2 =>
-        if (args(0) != "-v") {
-          usageErr()
-        }
-        (true, args(1))
-      case _ =>
-        usageErr()
-    }
-  Resolve(version, verbose = verbose) match {
+  val (project, rest) = args.toList match {
+    case "--project" :: name :: remaining => (Some(name), remaining)
+    case remaining => (None, remaining)
+  }
+  val (verbose, version) = rest match {
+    case "-v" :: v :: Nil => (true, v)
+    case v :: Nil => (false, v)
+    case _ => usageErr()
+  }
+  project.fold(Resolve(version, verbose))(Resolve(_, version, verbose)) match {
     case Right(bin) => println(bin.path)
     case Left(err) =>
       System.err.println(err)

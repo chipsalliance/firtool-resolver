@@ -111,14 +111,17 @@ private[firtoolresolver] class Sandbox(
     envCache: Option[String] = Some(cache.toString),
     envPath: Option[String] = None,
     javaOpts: Seq[String] = Nil,
-    extraClasspath: Seq[Path] = Nil
+    extraClasspath: Seq[Path] = Nil,
+    project: Option[String] = None,
+    extraEnv: Map[String, String] = Map.empty
   ): Child = {
     val classpath = System.getProperty(classpathProperty)
     require(classpath != null, s"System property $classpathProperty is not set")
     val cp = (extraClasspath.map(_.toString) :+ classpath).mkString(java.io.File.pathSeparator)
     val javaCommand = Paths.get(System.getProperty("java.home"), "bin", "java").toString
     val command =
-      Seq(javaCommand) ++ javaOpts ++ Seq("-cp", cp, "firtoolresolver.Main") ++ (if (verbose) Seq("-v") else Nil) :+ arg
+      Seq(javaCommand) ++ javaOpts ++ Seq("-cp", cp, "firtoolresolver.Main") ++
+        project.toSeq.flatMap(name => Seq("--project", name)) ++ (if (verbose) Seq("-v") else Nil) :+ arg
     val out = Files.createTempFile(root, "stdout-", ".txt")
     val err = Files.createTempFile(root, "stderr-", ".txt")
     val builder = new ProcessBuilder(command: _*)
@@ -127,10 +130,14 @@ private[firtoolresolver] class Sandbox(
     val env = builder.environment()
     Seq("CHISEL_FIRTOOL_PATH", "CHISEL_FIRTOOL_VERSION", "CHISEL_FIRTOOL_CACHE", "CHISEL_FIRTOOL_URL",
       "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS").foreach(env.remove(_))
+    project.foreach { name =>
+      Seq("PATH", "VERSION", "CACHE", "URL").foreach(key => env.remove(s"${name.toUpperCase(java.util.Locale.ROOT)}_FIRTOOL_$key"))
+    }
     envPath.foreach(env.put("CHISEL_FIRTOOL_PATH", _))
     envVersion.foreach(env.put("CHISEL_FIRTOOL_VERSION", _))
     envCache.foreach(env.put("CHISEL_FIRTOOL_CACHE", _))
     envURL.foreach(env.put("CHISEL_FIRTOOL_URL", _))
+    extraEnv.foreach { case (key, value) => env.put(key, value) }
     new Child(builder.start(), out, err)
   }
 

@@ -40,17 +40,14 @@ private[firtoolresolver] object GitHub {
     *
     * The checksum comes from the `<asset>.sha256` file published next to the asset, not from the `digest` field
     * of the GitHub releases API, because:
-    *  - `chisel.firtool.url` mirrors are plain file trees and do not implement the API
+    *  - configured mirrors are plain file trees and do not implement the API
     *  - releases up to firtool-1.119.0 have `"digest": null`, while the .sha256 files exist for all versions
     *  - the API is rate limited (60 requests/hour unauthenticated), the download URLs are not
     *  - using the API would require parsing JSON
     */
-  def lookup(logger: Logger, version: String, platform: String): Option[Release] = {
+  def lookup(logger: Logger, base: String, version: String, platform: String): Option[Release] = {
     val circtPlatform = if (platform == "macos-aarch64") "macos-arm64" else platform
     val extension = if (platform.startsWith("windows-")) "zip" else "tar.gz"
-    val base = sys.props.get("chisel.firtool.url")
-      .orElse(sys.env.get("CHISEL_FIRTOOL_URL"))
-      .getOrElse("https://github.com/llvm/circt/releases/download")
     val url = new URL(s"${base.stripSuffix("/")}/firtool-$version/firrtl-bin-$circtPlatform.$extension")
     logger.debug(s"Downloading SHA-256 checksum from $url.sha256")
     try {
