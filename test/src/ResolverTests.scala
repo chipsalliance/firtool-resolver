@@ -3,11 +3,11 @@
 package firtoolresolver
 
 import java.nio.file.{Files, Path}
-import scala.jdk.CollectionConverters._
+import scala.collection.JavaConverters._
 import Check._
 import TestFixtures._
 
-/** Hermetic resolver tests run real JVMs against local release and Maven fixtures.
+/** Hermetic resolver tests run real JVMs against local release and classpath fixtures.
   *
   * This covers what used to be the FileCheck scripts; the only things left out are those requiring real servers
   * (see [[LiveTests]]).
@@ -90,7 +90,7 @@ abstract class ResolverSuite(classpathProperty: String) extends TemporaryDirecto
     write(s.asset.checksum, bytes("0" * 64))
     val result = failed(s.launch())
     assert(result.err.contains(s"expected ${"0" * 64}, actual ${digest(s.asset.archive)}"), result.output)
-    assert(result.err.contains("Attempting to fetch org.chipsalliance:llvm-firtool:"), result.output)
+    assertAbsent(result.err, "Attempting to fetch org.chipsalliance:llvm-firtool:")
     assert(result.err.contains("Failed to fetch firtool:"), result.output)
     assert(!Files.exists(s.binary()))
     assertEquals(walk(s.cache.resolve(s.version)).count(Files.isRegularFile(_)), 0)
@@ -169,29 +169,6 @@ abstract class ResolverSuite(classpathProperty: String) extends TemporaryDirecto
     assert(!Files.exists(s.binary(s.classpathVersion)))
   }
 
-  // ---- Maven fallback (coursier_fallback.sh) ----
-
-  directory.test("falls back to Maven when GitHub fails") { root =>
-    val s = sandbox(root)
-    s.publishMaven()
-    val result = succeeded(s.launch(arg = s.version, envVersion = None, envURL = Some("file:///nonexistent")))
-    checkLog(result.err,
-      has(s"Fetching firtool ${s.version} from GitHub failed:"),
-      has(s"Attempting to fetch org.chipsalliance:llvm-firtool:${s.version}"),
-      has(s"Firtool version ${s.version} found in resources"))
-    assertEquals(java.nio.file.Paths.get(result.out.trim), s.binary())
-    assertEquals(Files.readAllBytes(s.binary()).toSeq, s.executable.toSeq)
-  }
-
-  directory.test("Maven fallback honors the override despite a different classpath version") { root =>
-    val s = sandbox(root)
-    s.publishMaven()
-    val result = succeeded(s.launch(extraClasspath = Seq(s.classpathResources()), envURL = Some("file:///nonexistent")))
-    assert(result.err.contains(s"Firtool version ${s.version} found in resources"), result.output)
-    assertEquals(Files.readAllBytes(s.binary()).toSeq, s.executable.toSeq)
-    assert(!Files.exists(s.cache.resolve(s.classpathVersion)))
-  }
-
   // ---- Platform fallback (platform_fallback.sh) ----
 
   directory.test("macOS arm64 falls back to the x64 release asset when no arm64 asset is published") { root =>
@@ -220,15 +197,12 @@ abstract class ResolverSuite(classpathProperty: String) extends TemporaryDirecto
       result.output)
   }
 
-  directory.test("macOS arm64 falls back to x64 resources in Maven artifacts") { root =>
+  directory.test("macOS arm64 falls back to x64 resources on the classpath") { root =>
     val s = sandbox(root, Nil)
-    s.publishMaven(forPlatforms = Seq("macos-x64"))
-    val result = succeeded(s.launch(arg = s.version, envVersion = None, javaOpts = Host.macArm64))
+    val result = succeeded(s.launch(arg = s.version, envVersion = None, javaOpts = Host.macArm64,
+      extraClasspath = Seq(s.classpathResources(platform = "macos-x64"))))
     checkLog(result.err,
-      has("Falling back to platform macos-x64"),
-      has(s"Firtool version ${s.version} found in resources"),
       has("Falling back to macos-x64 resources"))
-    assertEquals(Files.readAllBytes(s.binary()).toSeq, s.executable.toSeq)
   }
 
   // ---- CHISEL_FIRTOOL_PATH (firtool_path.sh) ----

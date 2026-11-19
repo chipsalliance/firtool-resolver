@@ -36,7 +36,7 @@ class HttpTests extends TemporaryDirectorySuite with LogAssertions {
     server.start()
     try {
       val url = s"http://${server.getAddress.getAddress.getHostAddress}:${server.getAddress.getPort}"
-      import scala.jdk.CollectionConverters._
+      import scala.collection.JavaConverters._
       body(url, () => requests.asScala.toVector)
     } finally server.stop(0)
   }

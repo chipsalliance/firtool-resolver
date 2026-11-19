@@ -30,7 +30,6 @@ cs launch --scala 2.13 org.chipsalliance::firtool-resolver:2.2.0 \
 3. If no explicit version is set, honor `llvm-firtool` on the classpath. This legacy mechanism logs a deprecation message at info level.
 4. Reuse the cached binary at `<cache>/<effective-version>/bin/firtool`.
 5. Download the effective version from GitHub, verify its checksum, and atomically install just the executable in the cache. Downloads are locked per version across processes.
-6. As a last resort, fetch `llvm-firtool` with Coursier from Maven. This supports older versions and environments that can reach a Maven proxy but cannot reach GitHub; it only works for already-published artifacts.
 
 ### Configuration
 
@@ -59,15 +58,15 @@ To use an internal web server (HTTP or HTTPS), an Artifactory generic remote, or
 | `macos-aarch64` | `firrtl-bin-macos-arm64.tar.gz` |
 | `windows-x64` | `firrtl-bin-windows-x64.zip` |
 
-GitHub fetching supports versions starting at **1.45.0**. Native macOS arm64 assets start at **1.144.0**; earlier versions fall back to macOS x64 through Rosetta. Older releases remain available through the legacy Maven path.
+GitHub fetching supports versions starting at **1.45.0**. Native macOS arm64 assets start at **1.144.0**; earlier versions fall back to macOS x64 through Rosetta. For versions older than **1.45.0**, provide a local binary or a legacy jar on the classpath.
 
 ### Development and release
 
 Run `./mill -i 'firtool-resolver[_].test'` for the tests on both Scala versions, or `./mill -i 'firtool-resolver[2.13].test'` for just Scala 2.13.
 
-The tests are MUnit tests that run the resolver in real JVMs against local fixtures (a fake release mirror, a fake Maven repository, and local HTTP servers), once from the unshaded classes and once from the shaded jar as published. They also check the contents of the published jar.
+The tests are MUnit tests that run the resolver in real JVMs against local fixtures (a fake release mirror, classpath resources, and local HTTP servers), once from the unshaded classes and once from the shaded jar as published. They also check the contents of the published jar.
 
-`LiveTests` additionally exercise the real GitHub releases, Maven Central, and real firtool binaries. They need network access, are tagged `live`, and run by default. Use MUnit's tag filters to select which tests to run:
+`LiveTests` downloads and runs a real firtool release from GitHub. It needs network access, is tagged `live`, and runs by default. Use MUnit's tag filters to select which tests to run:
 
 ```bash
 # Hermetic tests only

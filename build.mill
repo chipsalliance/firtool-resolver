@@ -112,13 +112,6 @@ trait FirtoolResolver extends CrossScalaModule with ChipsAlliancePublishModule {
     Agg(PathRef(dir))
   }
 
-  // TODO These are the things stripped from upstreamAssemblyClasspath (in addition to scala-library).
-  // Is it possible to derive these automatically?
-  def ivyDeps = Agg(
-    ivy"org.scala-lang.modules::scala-xml:2.2.0",
-    ivy"org.scala-lang.modules::scala-collection-compat:2.11.0"
-  )
-
   object core extends ScalaModule {
 
     def scalaVersion = root.scalaVersion
@@ -132,14 +125,13 @@ trait FirtoolResolver extends CrossScalaModule with ChipsAlliancePublishModule {
     // getting System property os.name
     def ivyDeps = Agg(
       ivy"dev.dirs:directories:26",
-      ivy"io.get-coursier::coursier:2.1.8",
       ivy"org.apache.commons:commons-compress:1.24.0",
     )
 
     // Modify the classpath to remove things we want to dynamically link (Scala jars).
     override def upstreamIvyAssemblyClasspath: T[Agg[PathRef]] = T {
       val all = super.upstreamIvyAssemblyClasspath()
-      // Remove Scala jars (scala-library, scala-collection-compat, scala-xml, etc.)
+      // The published assembly links against Scala rather than bundling it.
       val regex = """scala.*\.jar""".r
       all.filterNot(p => regex.matches(p.path.last))
     }
@@ -148,24 +140,9 @@ trait FirtoolResolver extends CrossScalaModule with ChipsAlliancePublishModule {
     // Including the launcher causes unzip to fail.
     override def prependShellScript: T[String] = T { "" }
 
-    // It would be nice if this could be derived from dependencies.
     def packagesToShade = Seq(
       "dev.dirs",
-      "coursier",
-      "com.github.plokhotnyuk",
-      "concurrentrefhashmap",
-      "org.codehaus",
-      "scala.cli",
-      "io.github.alexarchambault",
-      "javax.inject",
-      "org.apache.commons",
-      "org.slf4j",
-      "org.iq80.snappy",
-      "org.tukaani.xz",
-      "com.github.luben.zstd",
-      "org.apache.xbean",
-      "org.fusesource.jansi",
-      "org.fusesource.hawtjni",
+      "org.apache.commons.compress",
     )
 
     override def assemblyRules =

@@ -26,9 +26,13 @@ class JarTests extends munit.FunSuite {
   }
 
   test("dependencies are shaded and not left at their original packages") {
-    val unshaded = Seq("coursier/", "dev/dirs/", "org/apache/commons/")
-    val leaked = entries.filter(e => unshaded.exists(e.startsWith))
+    // Check every class, including any introduced by new transitive dependencies.
+    val leaked = entries.filter(e => e.endsWith(".class") && !e.startsWith("firtoolresolver/"))
     assert(leaked.isEmpty, s"unshaded entries:\n${leaked.take(10).mkString("\n")}")
-    assert(entries.exists(_.startsWith("firtoolresolver/shaded/coursier/")), "coursier was not shaded")
+    Seq("dev/dirs/", "org/apache/commons/compress/").foreach { pkg =>
+      assert(entries.exists(e => e.startsWith(s"firtoolresolver/shaded/$pkg") && e.endsWith(".class")),
+        s"missing shaded classes for $pkg")
+    }
+    assert(!entries.exists(_.contains("coursier/")), "jar contains Coursier classes")
   }
 }
