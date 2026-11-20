@@ -24,3 +24,19 @@ jobs:
           # First run of mill is important to set itself up
           ./mill resolve _
           ./mill -i 'firtool-resolver[${{ matrix.scala-version }}].test'
+
+  mima:
+    name: Binary Compatibility Check
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Install Scala and Coursier
+        uses: coursier/setup-action@v2
+        with:
+          jvm: temurin:17
+      - name: Check Binary Compatibility with MiMa
+        run: |
+          # First run of mill is important to set itself up
+          ./mill resolve _
+          ./mill -i 'firtool-resolver[2.13].mimaReportBinaryIssues'
